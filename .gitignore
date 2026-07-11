@@ -1,0 +1,12 @@
+/.venv
+/__pycache__
+/corr.csv
+/cov.csv
+/financial_data
+/income.csv
+/mean.csv
+/std.csv
+/stock-calc-descriptive.py
+/stock-calc-explore.py
+/stock-calc-sample.py
+/test.py
