@@ -4,7 +4,7 @@ file, with account, sumbol, market value, cost basis and
 estimated annual income. User can invoke a ui with a button click to generate
 a presentable summary table, pie chart and detailed table
 
-# Step
+# Steps
 ## Download
 ### Go to Schwab positions, and download all brokerage positions
 ### Go to schwab income, select next 12 month, and download estimated incomes
