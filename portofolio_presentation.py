@@ -57,11 +57,11 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                 overall_df = pd.concat([overall_df, overall_total], ignore_index=True)
 
                 # --- 2. FORMAT AND DISPLAY MAIN SUMMARY ---
-                st.subheader("📊 Overall Asset Allocation Strategy")
+                st.subheader("📊 Portfolio Performance & Composition Overview")
                  
                 formatted_overall = overall_df.copy()
                 formatted_overall['MarketValue'] = formatted_overall['MarketValue'].map('${:,.0f}'.format)
-                #formatted_overall['Gain'] = formatted_overall['Gain'].map('${:,.0f}'.format)
+                formatted_overall['Gain'] = formatted_overall['Gain'].map('${:,.0f}'.format)
                 formatted_overall['AnnualIncome'] = formatted_overall['AnnualIncome'].map('${:,.0f}'.format)
                 formatted_overall['Div Rate'] = formatted_overall['Div Rate'].map('{:.2f}%'.format)
                 formatted_overall['Allocation %'] = formatted_overall['Allocation %'].map('{:.2f}%'.format)
