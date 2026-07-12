@@ -15,8 +15,7 @@ a presentable summary table, pie chart and detailed table
 ```bash
 streamlit run portfolio_presentation.py
 ```
-go to localhost:8501 on your browser 
-and click the run button
+go to http://localhost:8501 on your browser and click the run button
 
 ## Further Analysis
 One can also look at the account_summary csv file in the output directory and conduct other excel related activities as needed, such as reading detailed positions,  generate pivot table or graphics
