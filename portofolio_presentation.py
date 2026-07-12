@@ -59,7 +59,7 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                 formatted_overall['Div Rate'] = formatted_overall['Div Rate'].map('{:.2f}%'.format)
                 formatted_overall['Allocation %'] = formatted_overall['Allocation %'].map('{:.2f}%'.format)
                 
-                st.dataframe(formatted_overall, use_container_width=True, hide_index=True)
+                st.dataframe(formatted_overall, width='stretch', hide_index=True)
 
                 # Optional visualization chart callout using Altair for a clean pie layout
                 chart_df = overall_df[overall_df['Allocation'] != 'Total Portfolio']
@@ -73,7 +73,7 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                 ).properties(
                     height=350
                 )
-                st.altair_chart(pie_chart, use_container_width=True)
+                st.altair_chart(pie_chart, width='stretch')
 
                 # --- 3. EXPANDABLE ACCOUNT-BY-ACCOUNT BREAKDOWNS ---
                 st.write("") 
@@ -99,7 +99,7 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                     formatted_acct['Div Rate'] = formatted_acct['Div Rate'].map('{:.2f}%'.format)
                     formatted_acct['Allocation %'] = formatted_acct['Allocation %'].map('{:.2f}%'.format)
                     
-                    st.dataframe(formatted_acct, use_container_width=True, hide_index=True)
+                    st.dataframe(formatted_acct, width='stretch', hide_index=True)
 
             else:
                 st.error("Workflow compiled successfully, but output summary file was not detected.")
