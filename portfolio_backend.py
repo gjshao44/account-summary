@@ -138,8 +138,10 @@ def estimate_fidelity_income(schwab_df, fidelity_df):
         mkt_val = row['MarketValue']
         
         if symbol == 'CASH':
-            # Apply 3% default rate for all cash positions
-            fidelity_df.at[idx, 'EstimatedAnnualIncome'] = mkt_val * 0.03
+            # Use Schwab's actual SWVXX (money market) yield as the cash rate,
+            # falling back to a flat 3% if SWVXX isn't present in this period's Schwab data
+            cash_yield = yield_map.get('SWVXX', 0.03)
+            fidelity_df.at[idx, 'EstimatedAnnualIncome'] = mkt_val * cash_yield
         elif symbol in yield_map:
             # Mirror the exact yield from the matching Schwab asset
             fidelity_df.at[idx, 'EstimatedAnnualIncome'] = mkt_val * yield_map[symbol]
@@ -194,11 +196,18 @@ def run_portfolio_workflow():
     else:
         print("Note: No Fidelity file found matching 'Portfolio_Positions*'. Skipping Fidelity.")
 
-    # Clean currencies right away so math functions work
-    for col in ['Quantity', 'MarketValue', 'CostBasis']:
+    # Clean currencies right away so math functions work.
+    # NOTE: CostBasis is intentionally NOT filled with 0 here - we need to distinguish
+    # a genuinely missing cost basis (NaN) from a real cost basis of $0 (e.g. employer
+    # stock grants, DRIP shares, or gifted shares with basis tracked elsewhere).
+    for col in ['Quantity', 'MarketValue']:
         schwab_pos[col] = schwab_pos[col].apply(clean_currency).fillna(0)
         if not fidelity_pos.empty:
             fidelity_pos[col] = fidelity_pos[col].apply(clean_currency).fillna(0)
+
+    schwab_pos['CostBasis'] = schwab_pos['CostBasis'].apply(clean_currency)
+    if not fidelity_pos.empty:
+        fidelity_pos['CostBasis'] = fidelity_pos['CostBasis'].apply(clean_currency)
 
     # 4. Process Income (Schwab Only)
     income_df = pd.read_csv(latest_income, skiprows=1)
@@ -239,8 +248,9 @@ def run_portfolio_workflow():
 
     # Combine Schwab master and Fidelity assets 
     master_df = pd.concat([schwab_master, fidelity_pos], ignore_index=True)
-    # Treat empty or 0 cost basis as equal to MarketValue for neutral gain tracking
-    master_df['CostBasis'] = master_df['CostBasis'].replace(0, pd.NA)
+    # Backfill only genuinely MISSING cost basis (NaN) with MarketValue, so Gain reads as
+    # neutral (0) when we truly have no data. A real cost basis of $0 (e.g. employer stock
+    # grants, DRIP shares) is left alone so its actual gain still shows up correctly.
     master_df['CostBasis'] = master_df['CostBasis'].fillna(master_df['MarketValue'])
 
     # Aggregate cross-brokerage summary profiles neatly
@@ -257,7 +267,7 @@ def run_portfolio_workflow():
         if 'ira' in name_str: return 'IRA'
         if 'roth' in name_str: return 'Roth'
         if 'pension' in name_str: return 'Pension'
-        if 'cash' in name_str or 'bank' in name_str: return 'Cash/Cash Equivalents'
+        if 'cash' in name_str or 'bank' in name_str: return 'Bank'
         return 'Investment'
 
     master_df['AccountType'] = master_df['AccountName'].apply(determine_account_type)
@@ -275,8 +285,13 @@ def run_portfolio_workflow():
         print(f"Warning: Mapping file not found at {mapping_file}. Creating empty Allocation column.")
         master_df['Allocation'] = pd.NA
         
+    # Normalize casing/whitespace on Allocation labels first, so overrides and mapped
+    # values merge into the same bucket instead of fragmenting (e.g. "Bond" vs "bond")
+    master_df['Allocation'] = master_df['Allocation'].astype(str).str.strip().str.title()
+    master_df['Allocation'] = master_df['Allocation'].replace('Nan', pd.NA)
+
     # Apply override rule: force CASH symbols to be classified as Bond
-    master_df.loc[master_df['Symbol'] == 'CASH', 'Allocation'] = 'bond'
+    master_df.loc[master_df['Symbol'] == 'CASH', 'Allocation'] = 'Bond'
     # Fill remaining unmatched assets with a default category if desired
     master_df['Allocation'] = master_df['Allocation'].fillna('Other/Unmapped')
 

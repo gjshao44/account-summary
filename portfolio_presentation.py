@@ -121,11 +121,14 @@ if latest_summary_file:
         }).reset_index()
         
         # Calculate yield and weight per account bucket
+        # NOTE: this is each row's share of the FULL portfolio (not % within its AccountType),
+        # so rows under a given AccountType won't sum to 100% - that's intentional, it shows
+        # each holding's overall portfolio weight. Labeled accordingly below.
         acct_df['Div Rate'] = (acct_df['AnnualIncome'] / acct_df['MarketValue'] * 100).fillna(0)
-        acct_df['Allocation %'] = (acct_df['MarketValue'] / total_mv * 100) if total_mv > 0 else 0.0
+        acct_df['% of Portfolio'] = (acct_df['MarketValue'] / total_mv * 100) if total_mv > 0 else 0.0
         
         # Reorder columns slightly for better readability
-        acct_df = acct_df[['AccountType', 'Allocation', 'MarketValue', 'Gain', 'AnnualIncome', 'Div Rate', 'Allocation %']]
+        acct_df = acct_df[['AccountType', 'Allocation', 'MarketValue', 'Gain', 'AnnualIncome', 'Div Rate', '% of Portfolio']]
         
         # Format sub-table
         formatted_acct = acct_df.copy()
@@ -133,7 +136,7 @@ if latest_summary_file:
         formatted_acct['Gain'] = formatted_acct['Gain'].map('${:,.0f}'.format)
         formatted_acct['AnnualIncome'] = formatted_acct['AnnualIncome'].map('${:,.0f}'.format)
         formatted_acct['Div Rate'] = formatted_acct['Div Rate'].map('{:.2f}%'.format)
-        formatted_acct['Allocation %'] = formatted_acct['Allocation %'].map('{:.2f}%'.format)
+        formatted_acct['% of Portfolio'] = formatted_acct['% of Portfolio'].map('{:.2f}%'.format)
         
         st.dataframe(formatted_acct, width='stretch', hide_index=True)
 
