@@ -239,6 +239,9 @@ def run_portfolio_workflow():
 
     # Combine Schwab master and Fidelity assets 
     master_df = pd.concat([schwab_master, fidelity_pos], ignore_index=True)
+    # Treat empty or 0 cost basis as equal to MarketValue for neutral gain tracking
+    master_df['CostBasis'] = master_df['CostBasis'].replace(0, pd.NA)
+    master_df['CostBasis'] = master_df['CostBasis'].fillna(master_df['MarketValue'])
 
     # Aggregate cross-brokerage summary profiles neatly
     master_df = master_df.groupby(['Symbol', 'AccountName', 'Description']).agg({

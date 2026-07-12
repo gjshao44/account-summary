@@ -21,16 +21,21 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
             if summary_files:
                 latest_summary_file = max(summary_files, key=os.path.getmtime)
                 master_df = pd.read_csv(latest_summary_file)
-                
+
+                # Calculate Gain
+                master_df['Gain'] = master_df['MarketValue'] - master_df['CostBasis']
+
                 st.success("Analysis Complete! Data synced across Schwab and Fidelity profiles.")
                 
                 # --- 1. CALCULATE GLOBAL OVERALL ALLOCATIONS ---
                 overall_df = master_df.groupby('Allocation').agg({
                     'MarketValue': 'sum',
+                    'Gain': 'sum',
                     'AnnualIncome': 'sum'
                 }).reset_index()
 
                 total_mv = overall_df['MarketValue'].sum()
+                total_gain = overall_df['Gain'].sum()
                 
                 # Calculate implied Yield % for the high-level rows
                 overall_df['Div Rate'] = (overall_df['AnnualIncome'] / overall_df['MarketValue'] * 100).fillna(0)
@@ -44,6 +49,7 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                 overall_total = pd.DataFrame([{
                     'Allocation': 'Total Portfolio',
                     'MarketValue': total_mv,
+                    'Gain': total_gain,
                     'AnnualIncome': overall_df['AnnualIncome'].sum(),
                     'Div Rate': (overall_df['AnnualIncome'].sum() / total_mv * 100) if total_mv > 0 else 0.0,
                     'Allocation %': 100.0
@@ -52,12 +58,15 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
 
                 # --- 2. FORMAT AND DISPLAY MAIN SUMMARY ---
                 st.subheader("📊 Overall Asset Allocation Strategy")
-                
+                 
                 formatted_overall = overall_df.copy()
                 formatted_overall['MarketValue'] = formatted_overall['MarketValue'].map('${:,.0f}'.format)
+                #formatted_overall['Gain'] = formatted_overall['Gain'].map('${:,.0f}'.format)
                 formatted_overall['AnnualIncome'] = formatted_overall['AnnualIncome'].map('${:,.0f}'.format)
                 formatted_overall['Div Rate'] = formatted_overall['Div Rate'].map('{:.2f}%'.format)
                 formatted_overall['Allocation %'] = formatted_overall['Allocation %'].map('{:.2f}%'.format)
+                # Then update your formatting block to include it
+                
                 
                 st.dataframe(formatted_overall, width='stretch', hide_index=True)
 
@@ -82,6 +91,7 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                     # Group by account type and allocation
                     acct_df = master_df.groupby(['AccountType', 'Allocation']).agg({
                         'MarketValue': 'sum',
+                        'Gain': 'sum',
                         'AnnualIncome': 'sum'
                     }).reset_index()
                     
@@ -90,11 +100,12 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
                     acct_df['Allocation %'] = (acct_df['MarketValue'] / total_mv * 100) if total_mv > 0 else 0.0
                     
                     # Reorder columns slightly for better readability
-                    acct_df = acct_df[['AccountType', 'Allocation', 'MarketValue', 'AnnualIncome', 'Div Rate', 'Allocation %']]
+                    acct_df = acct_df[['AccountType', 'Allocation', 'MarketValue', 'Gain', 'AnnualIncome', 'Div Rate', 'Allocation %']]
                     
                     # Format sub-table
                     formatted_acct = acct_df.copy()
                     formatted_acct['MarketValue'] = formatted_acct['MarketValue'].map('${:,.0f}'.format)
+                    formatted_acct['Gain'] = formatted_acct['Gain'].map('${:,.0f}'.format)
                     formatted_acct['AnnualIncome'] = formatted_acct['AnnualIncome'].map('${:,.0f}'.format)
                     formatted_acct['Div Rate'] = formatted_acct['Div Rate'].map('{:.2f}%'.format)
                     formatted_acct['Allocation %'] = formatted_acct['Allocation %'].map('{:.2f}%'.format)
