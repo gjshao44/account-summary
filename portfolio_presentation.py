@@ -11,7 +11,7 @@ if st.button("🔄 Run Portfolio Integration & Generate Summary"):
     with st.spinner("Processing brokerage statement data..."):
         try:
             # 1. Execute your backend processing pipeline 
-            from portofolio_backend import run_portfolio_workflow
+            from portfolio_backend import run_portfolio_workflow
             run_portfolio_workflow()
             
             # 2. Locate the newest master summary file generated
