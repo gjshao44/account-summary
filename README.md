@@ -24,7 +24,7 @@ Both outputs are reflected in the common dashboard, with Portfolio and Expense t
 ```bash
 streamlit run dashboard.py
 ```
-go to http://localhost:8501 on your browser, the data is loaded automaticall if present in the output directory already, otherwise, manuallyclick the run button for synching brokerage data and/or budget data as needed.
+go to http://localhost:8501 on your browser, the data is loaded automatically if present in the output directory already, otherwise, manuallyclick the run button for synching brokerage data and/or budget data as needed.
 
 ## Further Analysis
 One can also look at the account_summary csv file and *transaction_processed.csv/Yearly_budget.xlsx in the output directory and conduct other excel related activities as needed, such as reading detailed positions, generate pivot table or graphics
