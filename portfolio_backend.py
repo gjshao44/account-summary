@@ -168,7 +168,7 @@ def run_portfolio_workflow():
     
     # 1. Locate the latest files
     schwab_files = glob.glob(os.path.join(data_dir, 'All-Accounts-Positions-*-*-*.csv'))
-    income_files = glob.glob(os.path.join(data_dir, 'XXXX905_InvestmentIncome_*-*.CSV'))
+    income_files = glob.glob(os.path.join(data_dir, 'XXXX*_InvestmentIncome_*-*.CSV'))
     fidelity_files = glob.glob(os.path.join(data_dir, 'Portfolio_Positions*')) + glob.glob(os.path.join(data_dir, 'Portforlio_Positions*'))
     mapping_file = os.path.join(data_dir, 'asset_allocation_mapping.csv')
     
