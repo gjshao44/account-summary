@@ -376,6 +376,20 @@ with tab_inv:
         
         overall_df['Div Rate'] = (overall_df['AnnualIncome'] / overall_df['MarketValue'] * 100).fillna(0)
         overall_df['Allocation %'] = (overall_df['MarketValue'] / total_mv * 100) if total_mv > 0 else 0.0
+        total_mv = overall_df['MarketValue'].sum()
+        total_gain = overall_df['Gain'].sum()
+
+        # Append Overall Total Summary Row
+        overall_total = pd.DataFrame([{
+            'Allocation': 'Total Portfolio',
+            'MarketValue': total_mv,
+            'Gain': total_gain,
+            'AnnualIncome': overall_df['AnnualIncome'].sum(),
+            'Div Rate': (overall_df['AnnualIncome'].sum() / total_mv * 100) if total_mv > 0 else 0.0,
+            'Allocation %': 100.0
+        }])
+        overall_df = pd.concat([overall_df, overall_total], ignore_index=True)
+
     
         st.markdown("### 📊 Performance & Composition Summary")
         
@@ -389,7 +403,7 @@ with tab_inv:
         
         # Modern use_container_width scaling prevents front-end crashes
         st.dataframe(formatted_overall, width='stretch', hide_index=True)
-        
+
         st.markdown("---")
         
         # Setup charts with clean, responsive container-scaling parameters

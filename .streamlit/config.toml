@@ -1,5 +1,0 @@
-[server]
-fileWatcherType = "none"
-folderWatchBlacklist = ["financial_data", "expense_data"]
-[browser]
-gatherUsageStats = false
