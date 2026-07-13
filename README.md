@@ -9,16 +9,16 @@ Both outputs are reflected in the common dashboard, with Portfolio and Expense t
 
 # Steps
 ## Download portoflio data
-### Go to Schwab positions, and download all brokerage positions
-### Go to schwab income, select next 12 month, and download estimated incomes
-### Go to fidelity positions, and download all positions
-### Put all csv files under subdirectory financial_data/input
+- Go to Schwab positions, and download all brokerage positions
+- Go to schwab income, select next 12 month, and download estimated incomes
+- Go to fidelity positions, and download all positions
+- Put all csv files under subdirectory financial_data/input
 ## Download budget data
-### Go to Empower personal dashboard transactions, and download all transactions for the year
-### Setup a Yearly_budget.xlsx as a multi-year tracking with income and expense tabs
-### Setup category_type_mapping.csv for any category you want to map to expense/income/transfer
-### Setup budget_category_aiases.csv for any customized category you want to use
-### Put all speadsheet files under subdirectory expense_data/input
+- Go to Empower personal dashboard transactions, and download all transactions for the year
+- Setup a Yearly_budget.xlsx as a multi-year tracking with income and expense tabs
+- Setup category_type_mapping.csv for any category you want to map to expense/income/transfer
+- Setup budget_category_aiases.csv for any customized category you want to use
+- Put all speadsheet files under subdirectory expense_data/input
 
 ## Run
 ```bash
