@@ -606,7 +606,5 @@ with tab_exp:
                     )
         else:
             st.success("✨ Zero unmapped categories or extreme transaction anomalies flagged this cycle!")
-            
-
     else:
         st.info("No transaction spreadsheets found in outputs. Drop transactions CSV and budget templates into 'expense_data/input/' to start calculation workflows.")

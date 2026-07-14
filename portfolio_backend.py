@@ -60,7 +60,7 @@ def parse_fidelity_positions_csv(filepath):
     df = df[~df[account_col].astype(str).str.contains(r'Total|Notes|\*', case=False, na=False)]
     
     # Target accounts to isolate
-    target_accounts = ['cash management', 'fidelity bank account', 'guoqing ira - citi', 'jpmc pension']
+    target_accounts = ['min Fidelity', 'fidelity', 'guoqing ira - citi', 'jpmc pension']
     
     def matches_target(acc_name):
         acc_lower = str(acc_name).lower()
@@ -169,7 +169,7 @@ def run_portfolio_workflow():
     # 1. Locate the latest files
     schwab_files = glob.glob(os.path.join(data_dir, 'All-Accounts-Positions-*-*-*.csv'))
     income_files = glob.glob(os.path.join(data_dir, 'XXXX*_InvestmentIncome_*-*.CSV'))
-    fidelity_files = glob.glob(os.path.join(data_dir, 'Portfolio_Positions*')) + glob.glob(os.path.join(data_dir, 'Portforlio_Positions*'))
+    fidelity_files = glob.glob(os.path.join(data_dir, 'Portfolio_Positions*'))
     mapping_file = os.path.join(data_dir, 'asset_allocation_mapping.csv')
     
     if not (schwab_files and income_files):
@@ -266,12 +266,12 @@ def run_portfolio_workflow():
         name_str = str(name).lower()
         if 'ira' in name_str: return 'IRA'
         if 'roth' in name_str: return 'Roth'
-        if 'pension' in name_str: return 'Pension'
-        if 'cash' in name_str or 'bank' in name_str: return 'Bank'
+        if 'pension' in name_str: return 'IRA'
+        if 'fidelity' in name_str: return 'Investment'
         return 'Investment'
 
     master_df['AccountType'] = master_df['AccountName'].apply(determine_account_type)
-    
+
     # --- INCORPORATE ASSET ALLOCATION MAPPING ---
     if os.path.exists(mapping_file):
         # Read allocation mapping (Assumes columns like 'Symbol' and 'Allocation')
