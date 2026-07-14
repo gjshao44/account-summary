@@ -571,8 +571,7 @@ with tab_exp:
             if alerts_data['unmapped']:
                 with st.expander("⚠️ Unmapped Transaction Categories Found"):                
                     st.markdown(
-                        f"""<div class="alert-card alert-danger">
-                        <strong>⚠️ Unmapped Transaction Categories Found:</strong><br/>
+                        f"""<div class="alert-card alert-danger" style="margin: 0; padding: 10px;">
                         These categories exist in your statements but are missing in <code>category_type_mapping.csv</code>.
                         They are tagged <strong>UNMAPPED</strong>. Please update mapping table and recalculate.
                         <ul style="margin-top: 5px; margin-bottom: 0;">
@@ -585,8 +584,7 @@ with tab_exp:
             if alerts_data['others']:
                 with st.expander("📋 Categories Rolled into 'Others'"):
                     st.markdown(
-                        f"""<div class="alert-card alert-warning">
-                        <strong>📋 Categories Rolled into 'Others':</strong><br/>
+                        f"""<div class="alert-card alert-warning" style="margin: 0; padding: 10px;">
                         These budget categories don't have matching line items in <code>Yearly_budget.xlsx</code> 
                         and lack an alias mapping configuration, defaulting to 'Others'. Create row entries or custom aliases.
                         <ul style="margin-top: 5px; margin-bottom: 0;">
@@ -599,8 +597,7 @@ with tab_exp:
             if alerts_data['abnormal']:
                 with st.expander("🔎 Unusual / Abnormal Transaction Outliers Flagged"):
                     st.markdown(
-                        f"""<div class="alert-card alert-warning">
-                        <strong>🔎 Unusual / Abnormal Transaction Outliers Flagged</strong><br/>
+                        f"""<div class="alert-card alert-warning" style="margin: 0; padding: 10px;">
                         These transactions appear to be outliers and are flagged to study further.
                         <ul style="margin-top: 5px; margin-bottom: 0;">
                             {"".join([f"<li>{cat}</li>" for cat in alerts_data['abnormal']])}
