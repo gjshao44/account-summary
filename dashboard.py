@@ -569,36 +569,44 @@ with tab_exp:
             
             # Unmapped warnings
             if alerts_data['unmapped']:
-                st.markdown(
-                    f"""<div class="alert-card alert-danger">
-                    <strong>⚠️ Unmapped Transaction Categories Found:</strong><br/>
-                    These categories exist in your statements but are missing in <code>category_type_mapping.csv</code>.
-                    They are tagged <strong>UNMAPPED</strong>. Please update mapping table and recalculate.
-                    <ul style="margin-top: 5px; margin-bottom: 0;">
-                        {"".join([f"<li>{cat}</li>" for cat in alerts_data['unmapped']])}
-                    </ul>
-                    </div>""", unsafe_allow_html=True
-                )
+                with st.expander("⚠️ Unmapped Transaction Categories Found"):                
+                    st.markdown(
+                        f"""<div class="alert-card alert-danger">
+                        <strong>⚠️ Unmapped Transaction Categories Found:</strong><br/>
+                        These categories exist in your statements but are missing in <code>category_type_mapping.csv</code>.
+                        They are tagged <strong>UNMAPPED</strong>. Please update mapping table and recalculate.
+                        <ul style="margin-top: 5px; margin-bottom: 0;">
+                            {"".join([f"<li>{cat}</li>" for cat in alerts_data['unmapped']])}
+                        </ul>
+                        </div>""", unsafe_allow_html=True
+                    )
                 
             # Category others rollover warnings
             if alerts_data['others']:
-                st.markdown(
-                    f"""<div class="alert-card alert-warning">
-                    <strong>📋 Categories Rolled into 'Others':</strong><br/>
-                    These budget categories don't have matching line items in <code>Yearly_budget.xlsx</code> 
-                    and lack an alias mapping configuration, defaulting to 'Others'. Create row entries or custom aliases.
-                    <ul style="margin-top: 5px; margin-bottom: 0;">
-                        {"".join([f"<li>{cat}</li>" for cat in alerts_data['others']])}
-                    </ul>
-                    </div>""", unsafe_allow_html=True
-                )
+                with st.expander("📋 Categories Rolled into 'Others'"):
+                    st.markdown(
+                        f"""<div class="alert-card alert-warning">
+                        <strong>📋 Categories Rolled into 'Others':</strong><br/>
+                        These budget categories don't have matching line items in <code>Yearly_budget.xlsx</code> 
+                        and lack an alias mapping configuration, defaulting to 'Others'. Create row entries or custom aliases.
+                        <ul style="margin-top: 5px; margin-bottom: 0;">
+                            {"".join([f"<li>{cat}</li>" for cat in alerts_data['others']])}
+                        </ul>
+                        </div>""", unsafe_allow_html=True
+                    )
                 
             # Outliers detector
             if alerts_data['abnormal']:
                 with st.expander("🔎 Unusual / Abnormal Transaction Outliers Flagged"):
-                    for txn in alerts_data['abnormal']:
-                        st.markdown(f"- {txn}")
-                        
+                    st.markdown(
+                        f"""<div class="alert-card alert-warning">
+                        <strong>🔎 Unusual / Abnormal Transaction Outliers Flagged</strong><br/>
+                        These transactions appear to be outliers and are flagged to study further.
+                        <ul style="margin-top: 5px; margin-bottom: 0;">
+                            {"".join([f"<li>{cat}</li>" for cat in alerts_data['abnormal']])}
+                        </ul>
+                        </div>""", unsafe_allow_html=True
+                    )
         else:
             st.success("✨ Zero unmapped categories or extreme transaction anomalies flagged this cycle!")
             

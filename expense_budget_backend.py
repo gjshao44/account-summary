@@ -215,6 +215,8 @@ def write_transactions_workbook(df, category_type_map, year, out_path, unmapped_
 
     r = 2
     type_subtotal_rows = []
+    accounting_fmt = '"$"#,##0_);("$"#,##0)'
+    
     for typ in type_order:
         cats_in_type = df.loc[df['Type'] == typ]
         # order categories by total magnitude, largest first, like the original pivot
@@ -228,6 +230,7 @@ def write_transactions_workbook(df, category_type_map, year, out_path, unmapped_
         first_cat_row = r
         for cat in cat_order:
             ws_sum.cell(row=r, column=1, value=cat)
+            ws_sum.row_dimensions[r].outline_level = 1
             for j, _mon in enumerate(MONTHS, start=2):
                 m = j - 1
                 col_letter = get_column_letter(6)  # Amount is column F on Sheet1
@@ -238,30 +241,39 @@ def write_transactions_workbook(df, category_type_map, year, out_path, unmapped_
                     f'Sheet1!$A$2:$A${last_data_row}, ">="&DATE({year},{m},1), '
                     f'Sheet1!$A$2:$A${last_data_row}, "<="&EOMONTH(DATE({year},{m},1),0))'
                 )
-                ws_sum.cell(row=r, column=j, value=formula)
-            ws_sum.cell(row=r, column=14, value=f'=SUM(B{r}:M{r})')
+                ws_sum.cell(row=r, column=j, value=formula).number_format = accounting_fmt
+            ws_sum.cell(row=r, column=14, value=f'=SUM(B{r}:M{r})').number_format = accounting_fmt
             r += 1
         last_cat_row = r - 1
         # Type subtotal = sum of its category rows
         for j in range(2, 15):
             col = get_column_letter(j)
             ws_sum.cell(row=type_row, column=j,
-                        value=f'=SUM({col}{first_cat_row}:{col}{last_cat_row})')
+                        value=f'=SUM({col}{first_cat_row}:{col}{last_cat_row})').number_format = accounting_fmt
 
     grand_total_row = r
     ws_sum.cell(row=grand_total_row, column=1, value='Grand Total').font = Font(bold=True)
     for j in range(2, 15):
         col = get_column_letter(j)
         refs = ','.join(f'{col}{tr}' for tr in type_subtotal_rows)
-        ws_sum.cell(row=grand_total_row, column=j, value=f'=SUM({refs})')
+        ws_sum.cell(row=grand_total_row, column=j, value=f'=SUM({refs})').number_format = accounting_fmt
 
-    write_alerts_sheet(wb, unmapped_alerts, abnormal_df, others_alerts)
-
-    for ws in (ws_lookup, ws_raw, ws_sum):
+    # --- Formatting Widths ---
+    for ws in (ws_lookup, ws_raw):
         for col_cells in ws.columns:
             length = max((len(str(c.value)) for c in col_cells if c.value is not None), default=10)
             ws.column_dimensions[col_cells[0].column_letter].width = min(max(length + 2, 10), 45)
 
+    # Specific logic for Summary tab to keep columns readable
+    for i, col_cells in enumerate(ws_sum.columns, start=1):
+        letter = get_column_letter(i)
+        if i == 1: # Column A: Row Labels (Auto-fit)
+            length = max((len(str(c.value)) for c in col_cells if c.value is not None), default=10)
+            ws_sum.column_dimensions[letter].width = min(max(length + 2, 10), 30)
+        else: # Columns B-N: Months and Totals (Fixed width)
+            ws_sum.column_dimensions[letter].width = 13
+
+    write_alerts_sheet(wb, unmapped_alerts, abnormal_df, others_alerts)
     wb.save(out_path)
     return {
         'type_subtotal_rows': dict(zip(type_order, type_subtotal_rows)),
