@@ -93,7 +93,7 @@ def find_input_file(patterns):
 # ---------------------------------------------------------------------------
 
 def load_raw_transactions(csv_path, category_type_map):
-    df = pd.read_csv(csv_path)
+    df = pd.read_csv(csv_path, encoding='utf-8-sig')
     df['Date'] = pd.to_datetime(df['Date'])
     df['Category'] = df['Category'].astype(str).str.strip()
     df['Type'] = df['Category'].map(category_type_map).fillna('UNMAPPED')

@@ -101,7 +101,8 @@ def parse_fidelity_positions_csv(filepath):
     standard_df['CostBasis'] = df[cost_basis_col] if cost_basis_col in df.columns else 0.0
     
     # Clean up standard core cash designations to tidy up output rows
-    standard_df.loc[standard_df['Symbol'].str.contains('Cash|Pending|Core|XX', case=False, na=False), 'Symbol'] = 'CASH'
+    standard_df = standard_df[~standard_df['Symbol'].str.contains('Pending', case=False, na=False)].copy()
+    standard_df.loc[standard_df['Symbol'].str.contains('Cash|Core|XX', case=False, na=False), 'Symbol'] = 'CASH'
     
     return standard_df
 
