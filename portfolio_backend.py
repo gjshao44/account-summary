@@ -109,7 +109,7 @@ def parse_fidelity_positions_csv(filepath):
 def estimate_fidelity_income(schwab_df, fidelity_df):
     """
     Estimates income for Fidelity assets using implied yields from Schwab data,
-    and applies a flat 3% yield to all CASH entries.
+    and applies SWVXX rate or a flat 3% yield to all CASH entries.
     """
     # 1. Calculate implied yields from Schwab positions
     # (Group by Symbol first to handle tickers split across multiple Schwab accounts)
