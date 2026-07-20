@@ -1,5 +1,5 @@
 # Summary
-The python scripts handle both portfolio and expense from outside sources, generate a dashboard for summary review. Users only need to download the necessary files in input directories, with some minor config file for mapping in the config. 
+The python scripts handle both portfolio and expense from outside sources, generate a dashboard for summary review. Users only need to download the necessary files in input directories, with some minor config file for mapping in the input. 
 ## Portfolio data
 Under finacial_data/input, take downloaded position and income files from schwab, supplemented by position file from fidelity, generate a account summary csv file, with account, sumbol, market value, cost basis and estimated annual income. 
 ## Budget data
