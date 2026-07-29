@@ -60,7 +60,7 @@ def parse_fidelity_positions_csv(filepath):
     df = df[~df[account_col].astype(str).str.contains(r'Total|Notes|\*', case=False, na=False)]
     
     # Target accounts to isolate
-    target_accounts = ['min Fidelity', 'fidelity', 'guoqing ira - citi', 'jpmc pension']
+    target_accounts = ['min Fidelity', 'fidelity', 'guoqing ira - citi', 'jpmc pension', 'guoqing 401k']
     
     def matches_target(acc_name):
         acc_lower = str(acc_name).lower()

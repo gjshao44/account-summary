@@ -438,7 +438,7 @@ with tab_inv:
                     
         st.write("")
         with st.expander("🔍 Click to view detailed holding allocation sorted by Account Type"):
-            acct_df = master_df.groupby(['AccountType', 'Allocation']).agg({
+            acct_df = master_df.groupby(['AccountType', 'AccountName', 'Allocation']).agg({
                 'MarketValue': 'sum',
                 'Gain': 'sum',
                 'AnnualIncome': 'sum'
