@@ -66,6 +66,21 @@ EXPENSE_DATA_INPUT = 'expense_data/input'
 EXPENSE_DATA_OUTPUT = 'expense_data/output'
 
 
+# Column-config helpers so tables stay numeric under the hood (correct header-click
+# sorting in st.dataframe) instead of pre-formatted into display strings.
+def dollar_col(label=None):
+    return st.column_config.NumberColumn(label, format="$%,.0f")
+
+
+def percent_col(label=None):
+    """For values already on a 0-100 scale (e.g. 45.2 meaning 45.2%)."""
+    return st.column_config.NumberColumn(label, format="%.2f%%")
+
+
+def fraction_percent_col(label=None):
+    """For values stored as a fraction (e.g. 0.452 meaning 45.2%) - auto-scales by 100."""
+    return st.column_config.NumberColumn(label, format="percent")
+
 
 def trigger_portfolio_pipeline():
     """Runs the investment pipeline backend in an isolated subprocess, capturing segmentation faults cleanly."""
@@ -346,10 +361,19 @@ def load_historical_budget_data():
         
         # Convert all categories list to a DataFrame
         df = pd.DataFrame(categories_data)
-        
+
+        # Sort by total magnitude across the shown years, largest first - matches
+        # the ordering convention already used in the generated Summary sheet,
+        # rather than whatever row order the sheet happens to have.
+        if not df.empty:
+            year_cols = [c for c in df.columns if c != 'Category']
+            sort_key = df[year_cols].abs().sum(axis=1) if year_cols else 0
+            df = df.assign(_sort_key=sort_key).sort_values('_sort_key', ascending=False) \
+                   .drop(columns='_sort_key').reset_index(drop=True)
+
         # Cast headers to strings to resolve PyArrow warnings
         df.columns = df.columns.astype(str)
-                
+
         return df, totals_map, historical_years
 
     df_exp, tot_exp, years_exp = parse_sheet_data('Expense')
@@ -537,29 +561,36 @@ with tab_inv:
 
     
         st.markdown("### 📊 Performance & Composition Summary")
-        
-        # Create standard formatted display
-        formatted_overall = overall_df.copy()
-        formatted_overall['MarketValue'] = formatted_overall['MarketValue'].map('${:,.0f}'.format)
-        formatted_overall['Gain'] = formatted_overall['Gain'].map('${:,.0f}'.format)
-        formatted_overall['AnnualIncome'] = formatted_overall['AnnualIncome'].map('${:,.0f}'.format)
-        formatted_overall['Div Rate'] = formatted_overall['Div Rate'].map('{:.2f}%'.format)
-        formatted_overall['Allocation %'] = formatted_overall['Allocation %'].map('{:.2f}%'.format)
-        
-        # Modern use_container_width scaling prevents front-end crashes
-        st.dataframe(formatted_overall, width='stretch', hide_index=True)
+
+        # Keep the underlying data numeric (column_config just controls display
+        # formatting) so clicking a column header sorts numerically, not alphabetically.
+        st.dataframe(
+            overall_df, width='stretch', hide_index=True,
+            column_config={
+                'MarketValue': dollar_col('MarketValue'),
+                'Gain': dollar_col('Gain'),
+                'AnnualIncome': dollar_col('AnnualIncome'),
+                'Div Rate': percent_col('Div Rate'),
+                'Allocation %': percent_col('Allocation %'),
+            }
+        )
 
         st.markdown("---")
         
         # Setup charts with clean, responsive container-scaling parameters
-        chart_df = overall_df.copy()
+        # Exclude the "Total Portfolio" summary row - it's a sum of the other slices,
+        # not a slice of its own, and would visually double the pie.
+        chart_df = overall_df[overall_df['Allocation'] != 'Total Portfolio'].copy()
+        income_sum = chart_df['AnnualIncome'].sum()
+        chart_df['IncomePct'] = (chart_df['AnnualIncome'] / income_sum * 100) if income_sum > 0 else 0.0
         color_encoding = alt.Color("Allocation:N", title="Asset Class", scale=alt.Scale(scheme='tableau10'))
-        
+
         pie_value = alt.Chart(chart_df).mark_arc(innerRadius=60).encode(
             theta=alt.Theta(field="MarketValue", type="quantitative"),
             color=color_encoding,
             tooltip=[
                 alt.Tooltip('Allocation:N', title='Asset Class'),
+                alt.Tooltip('Allocation %:Q', title='Weight (%)', format='.2f'),
                 alt.Tooltip('MarketValue:Q', title='Value ($)', format=',.0f')
             ]
         ).properties(title="Portfolio Weight (Asset Value)", height=280, width=280)
@@ -569,12 +600,13 @@ with tab_inv:
             color=color_encoding,
             tooltip=[
                 alt.Tooltip('Allocation:N', title='Asset Class'),
+                alt.Tooltip('IncomePct:Q', title='Income Share (%)', format='.2f'),
                 alt.Tooltip('AnnualIncome:Q', title='Value ($)', format=',.0f')
             ]
         ).properties(title="Income Contribution (Dividends)", height=280, width=280)
 
         # Build horizontal allocation map
-        combined_charts = (pie_value | pie_income).resolve_scale(color='shared')
+        combined_charts = (pie_value | pie_income).resolve_scale(color='shared').properties(spacing=60)
         
         # Place chart into container-fitting column layout
         chart_layout = st.columns([1, 0.4])
@@ -592,14 +624,16 @@ with tab_inv:
             acct_df['Div Rate'] = (acct_df['AnnualIncome'] / acct_df['MarketValue'] * 100).fillna(0)
             acct_df['% of Portfolio'] = (acct_df['MarketValue'] / total_mv * 100) if total_mv > 0 else 0.0
 
-            formatted_acct = acct_df.copy()
-            formatted_acct['MarketValue'] = formatted_acct['MarketValue'].map('${:,.0f}'.format)
-            formatted_acct['Gain'] = formatted_acct['Gain'].map('${:,.0f}'.format)
-            formatted_acct['AnnualIncome'] = formatted_acct['AnnualIncome'].map('${:,.0f}'.format)
-            formatted_acct['Div Rate'] = formatted_acct['Div Rate'].map('{:.2f}%'.format)
-            formatted_acct['% of Portfolio'] = formatted_acct['% of Portfolio'].map('{:.2f}%'.format)
-
-            st.dataframe(formatted_acct, width='stretch', hide_index=True)
+            st.dataframe(
+                acct_df, width='stretch', hide_index=True,
+                column_config={
+                    'MarketValue': dollar_col('MarketValue'),
+                    'Gain': dollar_col('Gain'),
+                    'AnnualIncome': dollar_col('AnnualIncome'),
+                    'Div Rate': percent_col('Div Rate'),
+                    '% of Portfolio': percent_col('% of Portfolio'),
+                }
+            )
 
         # ======================================================================
         # MULTI-YEAR PORTFOLIO SUMMARY (per-account Ending Value/Cash Flow/Gain/Return)
@@ -672,22 +706,18 @@ with tab_inv:
             col_s1.metric("Total Gain", f"${total_gain_all:,.0f}" if total_gain_all is not None else "N/A")
             cf_prefix_all = "+" if (total_cf_all is not None and total_cf_all >= 0) else ""
             col_s2.metric("Total Cash Flow", f"{cf_prefix_all}${total_cf_all:,.0f}" if total_cf_all is not None else "N/A")
-            col_s3.metric("Annualized Return", f"{annualized_return * 100:,.2f}%" if annualized_return is not None else "N/A")
-            col_s4.metric("Gain Share of Portfolio", f"{gain_share:,.1f}%" if gain_share is not None else "N/A")
+            col_s3.metric("Gain Share of Portfolio", f"{gain_share:,.1f}%" if gain_share is not None else "N/A")
+            col_s4.metric("Annualized Return", f"{annualized_return * 100:,.2f}%" if annualized_return is not None else "N/A")
 
-            def format_metric_df(df, years, as_percent=False):
+            def select_metric_df(df, years):
                 cols = ['Account'] + [str(y) for y in years]
                 cols = [c for c in cols if c in df.columns]
-                sub = df[cols].copy()
-                for y in years:
-                    ycol = str(y)
-                    if ycol not in sub.columns:
-                        continue
-                    if as_percent:
-                        sub[ycol] = sub[ycol].map(lambda v: f'{v * 100:,.2f}%' if pd.notna(v) else '—')
-                    else:
-                        sub[ycol] = sub[ycol].map(lambda v: f'${v:,.0f}' if pd.notna(v) else '—')
-                return sub
+                return df[cols]
+
+            def year_column_config(years, as_percent=False):
+                # Return sheet stores fractions (0.12 == 12%); everything else is dollars.
+                col_fn = fraction_percent_col if as_percent else dollar_col
+                return {str(y): col_fn(str(y)) for y in years}
 
             sub_tab_end, sub_tab_cf, sub_tab_gr = st.tabs(
                 ["🏦 Ending Value", "💵 Cash Flow", "📈 Gain & Return"]
@@ -696,35 +726,43 @@ with tab_inv:
             with sub_tab_end:
                 df = history_sheets.get('EndingValue')
                 if df is not None:
-                    st.dataframe(format_metric_df(df, recent_years), width='stretch', hide_index=True)
+                    st.dataframe(select_metric_df(df, recent_years), width='stretch', hide_index=True,
+                                 column_config=year_column_config(recent_years))
                     with st.expander(f"View full history since {history_years[0]}"):
-                        st.dataframe(format_metric_df(df, history_years), width='stretch', hide_index=True)
+                        st.dataframe(select_metric_df(df, history_years), width='stretch', hide_index=True,
+                                     column_config=year_column_config(history_years))
 
             with sub_tab_cf:
                 df = history_sheets.get('CashFlow')
                 if df is not None:
                     st.caption("Per-account detail is only tracked from the year this feature went live "
                                "onward — earlier years show group totals only.")
-                    st.dataframe(format_metric_df(df, recent_years), width='stretch', hide_index=True)
+                    st.dataframe(select_metric_df(df, recent_years), width='stretch', hide_index=True,
+                                 column_config=year_column_config(recent_years))
                     with st.expander(f"View full history since {history_years[0]}"):
-                        st.dataframe(format_metric_df(df, history_years), width='stretch', hide_index=True)
+                        st.dataframe(select_metric_df(df, history_years), width='stretch', hide_index=True,
+                                     column_config=year_column_config(history_years))
 
             with sub_tab_gr:
                 df_gain = history_sheets.get('Gain')
                 df_ret = history_sheets.get('Return')
                 st.markdown("###### Gain ($)")
                 if df_gain is not None:
-                    st.dataframe(format_metric_df(df_gain, recent_years), width='stretch', hide_index=True)
+                    st.dataframe(select_metric_df(df_gain, recent_years), width='stretch', hide_index=True,
+                                 column_config=year_column_config(recent_years))
                 st.markdown("###### Return (%)")
                 if df_ret is not None:
-                    st.dataframe(format_metric_df(df_ret, recent_years, as_percent=True), width='stretch', hide_index=True)
+                    st.dataframe(select_metric_df(df_ret, recent_years), width='stretch', hide_index=True,
+                                 column_config=year_column_config(recent_years, as_percent=True))
                 with st.expander(f"View full history since {history_years[0]}"):
                     st.markdown("###### Gain ($)")
                     if df_gain is not None:
-                        st.dataframe(format_metric_df(df_gain, history_years), width='stretch', hide_index=True)
+                        st.dataframe(select_metric_df(df_gain, history_years), width='stretch', hide_index=True,
+                                     column_config=year_column_config(history_years))
                     st.markdown("###### Return (%)")
                     if df_ret is not None:
-                        st.dataframe(format_metric_df(df_ret, history_years, as_percent=True), width='stretch', hide_index=True)
+                        st.dataframe(select_metric_df(df_ret, history_years), width='stretch', hide_index=True,
+                                     column_config=year_column_config(history_years, as_percent=True))
 
             st.markdown("---")
 
@@ -874,24 +912,15 @@ with tab_exp:
         
         sub_tab_exp, sub_tab_inc = st.tabs(["💸 Expense Ledgers", "💵 Income Ledgers"])
         
+        ledger_year_config = {str(yr): dollar_col(str(yr)) for yr in historical_years}
+
         with sub_tab_exp:
             if df_exp is not None and not df_exp.empty:
-                # Format Year columns
-                fmt_df = df_exp.copy()
-                for yr in historical_years:
-                    yr_str = str(yr)
-                    if yr_str in fmt_df.columns:
-                        fmt_df[yr_str] = fmt_df[yr_str].map('${:,.0f}'.format)
-                st.dataframe(fmt_df, width='stretch', hide_index=True)
-                
+                st.dataframe(df_exp, width='stretch', hide_index=True, column_config=ledger_year_config)
+
         with sub_tab_inc:
             if df_inc is not None and not df_inc.empty:
-                fmt_df = df_inc.copy()
-                for yr in historical_years:
-                    yr_str = str(yr)
-                    if yr_str in fmt_df.columns:
-                        fmt_df[yr_str] = fmt_df[yr_str].map('${:,.0f}'.format)
-                st.dataframe(fmt_df, width='stretch', hide_index=True)
+                st.dataframe(df_inc, width='stretch', hide_index=True, column_config=ledger_year_config)
 
         # Convert list of summaries for side-by-side charting
         st.markdown("---")                
