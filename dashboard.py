@@ -442,7 +442,7 @@ with st.sidebar:
 
     # Multi-Year Portfolio History Control
     st.subheader("📈 Multi-Year Portfolio History")
-    st.caption("Periodic reconciliation (not needed on every daily sync).")
+    # st.caption("Periodic reconciliation (not needed on every daily sync).")
     if st.button("🔄 Update Portfolio History"):
         with st.spinner("Recomputing multi-year portfolio history..."):
             success, msg = trigger_portfolio_history_pipeline()
@@ -450,8 +450,6 @@ with st.sidebar:
             st.success(msg)
         else:
             st.error(msg)
-
-    st.markdown("---")
 
     # Expense Control
     st.subheader("📊 Expense & Cash Flow")
