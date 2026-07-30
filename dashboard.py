@@ -100,11 +100,31 @@ def trigger_expense_pipeline():
     except subprocess.CalledProcessError as e:
         if e.returncode in [-11, 139]:
             return False, f"🚨 **SEGMENTATION FAULT DETECTED IN BACKEND** 🚨\n\nStack Trace:\n{e.stderr}"
-            
+
         error_msg = e.stderr if e.stderr else e.stdout
         return False, f"Expense Pipeline process disrupted (Code {e.returncode}):\n{error_msg}"
     except Exception as e:
         return False, f"Expense Pipeline process disrupted: {e}"
+
+def trigger_portfolio_history_pipeline():
+    """Runs the multi-year portfolio history backend (Ending Value/Cash Flow/Gain/Return),
+    recomputing only the current year's column."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-X", "faulthandler", "portfolio_history_backend.py"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return True, "Multi-year portfolio history updated successfully!"
+    except subprocess.CalledProcessError as e:
+        if e.returncode in [-11, 139]:
+            return False, f"🚨 **SEGMENTATION FAULT DETECTED IN BACKEND** 🚨\n\nStack Trace:\n{e.stderr}"
+
+        error_msg = e.stderr if e.stderr else e.stdout
+        return False, f"Portfolio History Pipeline process disrupted:\n{error_msg}"
+    except Exception as e:
+        return False, f"Portfolio History Pipeline process disrupted: {e}"
 
 
 # STREAMING_CHUNK: Managing automatic execution schedules...
@@ -204,6 +224,61 @@ def parse_alerts_log():
     }
 
 
+def parse_portfolio_history_alerts():
+    """
+    Parses the generated {year}_portfolio_alerts.txt file from the financial_data output
+    folder (written by portfolio_history_backend.py) to surface account-mapping warnings
+    on the frontend - the sidebar's "Update Portfolio History" button only shows a generic
+    success message, so this is otherwise console-only.
+    """
+    alert_files = glob.glob(os.path.join(FINANCIAL_DATA_OUTPUT, '*_portfolio_alerts.txt'))
+    if not alert_files:
+        return None
+
+    latest_alert_file = max(alert_files, key=os.path.getmtime)
+
+    skipped_accounts = []
+    unmapped_investment_accounts = []
+    other_warnings = []
+
+    current_section = None
+
+    try:
+        with open(latest_alert_file, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+
+                if "ACCOUNTS SKIPPED" in line:
+                    current_section = "skipped"
+                    continue
+                elif "POSSIBLE UNMAPPED INVESTMENT ACCOUNTS" in line:
+                    current_section = "unmapped_investment"
+                    continue
+                elif "NO TRANSACTIONS FILE FOUND" in line or "ROW LOOKUP WARNINGS" in line:
+                    current_section = "other"
+                    continue
+                elif line.startswith("===") or line.startswith("Portfolio History Alerts -"):
+                    continue
+
+                if current_section == "skipped" and line.startswith("-"):
+                    skipped_accounts.append(line[2:])
+                elif current_section == "unmapped_investment" and line.startswith("-"):
+                    unmapped_investment_accounts.append(line[2:])
+                elif current_section == "other" and line.startswith("-"):
+                    other_warnings.append(line[2:])
+    except Exception as e:
+        return {"error": f"Failed to parse portfolio alerts file: {e}"}
+
+    return {
+        "skipped": skipped_accounts,
+        "unmapped_investment": unmapped_investment_accounts,
+        "other": other_warnings,
+        "file_date": os.path.basename(latest_alert_file).replace('_portfolio_alerts.txt', '')
+    }
+
+
 # STREAMING_CHUNK: Loading comparative multi-year budget spreadsheets...
 
 def load_historical_budget_data():
@@ -279,11 +354,70 @@ def load_historical_budget_data():
 
     df_exp, tot_exp, years_exp = parse_sheet_data('Expense')
     df_inc, tot_inc, years_inc = parse_sheet_data('Income')
-    
+
     # Reconcile years across sheets
     all_years = sorted(list(set(years_exp + years_inc)))
-    
+
     return df_exp, df_inc, all_years, tot_exp, tot_inc
+
+
+# STREAMING_CHUNK: Loading multi-year portfolio history (Ending Value/Cash Flow/Gain/Return)...
+
+def load_historical_portfolio_data():
+    """
+    Loads Portfolio_History.xlsx (written by portfolio_history_backend.py) and parses its
+    four sheets - EndingValue, CashFlow, Gain, Return - each a per-account x per-year matrix
+    with Non-Retirement Total / Retirement Total / Grand Total rows.
+    Returns: {sheet_name: DataFrame} and the sorted list of years tracked.
+    """
+    output_path = os.path.join(FINANCIAL_DATA_OUTPUT, 'Portfolio_History.xlsx')
+    if not os.path.exists(output_path):
+        output_path = os.path.join(FINANCIAL_DATA_INPUT, 'Portfolio_History.xlsx')
+        if not os.path.exists(output_path):
+            return {}, []
+
+    try:
+        wb = openpyxl.load_workbook(output_path, data_only=True)
+    except Exception:
+        return {}, []
+
+    def parse_sheet(sheet_name):
+        if sheet_name not in wb.sheetnames:
+            return None, []
+        ws = wb[sheet_name]
+
+        col_to_year = {}
+        for col in range(2, ws.max_column + 1):
+            val = ws.cell(row=1, column=col).value
+            if val is not None and str(val).strip().isdigit():
+                col_to_year[col] = int(str(val).strip())
+        years = sorted(set(col_to_year.values()))
+
+        rows = []
+        for r in range(2, ws.max_row + 1):
+            label = ws.cell(row=r, column=1).value
+            if label is None or not str(label).strip():
+                continue
+            row_dict = {'Account': str(label).strip()}
+            for col, yr in col_to_year.items():
+                val = ws.cell(row=r, column=col).value
+                row_dict[yr] = float(val) if val is not None else None
+            rows.append(row_dict)
+
+        df = pd.DataFrame(rows)
+        df.columns = df.columns.astype(str)
+        return df, years
+
+    sheets = {}
+    all_years = []
+    for name in ['EndingValue', 'CashFlow', 'Gain', 'Return']:
+        df, years = parse_sheet(name)
+        if df is not None:
+            sheets[name] = df
+            if len(years) > len(all_years):
+                all_years = years
+
+    return sheets, all_years
 
 
 # STREAMING_CHUNK: Styling the sidebar controls...
@@ -305,7 +439,20 @@ with st.sidebar:
             st.success(msg)
         else:
             st.error(msg)
-            
+
+    # Multi-Year Portfolio History Control
+    st.subheader("📈 Multi-Year Portfolio History")
+    st.caption("Periodic reconciliation (not needed on every daily sync).")
+    if st.button("🔄 Update Portfolio History"):
+        with st.spinner("Recomputing multi-year portfolio history..."):
+            success, msg = trigger_portfolio_history_pipeline()
+        if success:
+            st.success(msg)
+        else:
+            st.error(msg)
+
+    st.markdown("---")
+
     # Expense Control
     st.subheader("📊 Expense & Cash Flow")
     if st.button("⚙️ Recalculate Budgets"):
@@ -315,7 +462,7 @@ with st.sidebar:
             st.success(msg)
         else:
             st.error(msg)
-            
+
     st.markdown("---")
     st.caption("Active Workspace Year: 2026")
     st.caption("Click the buttons above to manually sync your data.")
@@ -435,7 +582,7 @@ with tab_inv:
         chart_layout = st.columns([1, 0.4])
         with chart_layout[0]:
             st.altair_chart(combined_charts, width='stretch')
-                    
+
         st.write("")
         with st.expander("🔍 Click to view detailed holding allocation sorted by Account Type"):
             acct_df = master_df.groupby(['AccountType', 'AccountName', 'Allocation']).agg({
@@ -443,19 +590,243 @@ with tab_inv:
                 'Gain': 'sum',
                 'AnnualIncome': 'sum'
             }).reset_index()
-            
+
             acct_df['Div Rate'] = (acct_df['AnnualIncome'] / acct_df['MarketValue'] * 100).fillna(0)
             acct_df['% of Portfolio'] = (acct_df['MarketValue'] / total_mv * 100) if total_mv > 0 else 0.0
-            
+
             formatted_acct = acct_df.copy()
             formatted_acct['MarketValue'] = formatted_acct['MarketValue'].map('${:,.0f}'.format)
             formatted_acct['Gain'] = formatted_acct['Gain'].map('${:,.0f}'.format)
             formatted_acct['AnnualIncome'] = formatted_acct['AnnualIncome'].map('${:,.0f}'.format)
             formatted_acct['Div Rate'] = formatted_acct['Div Rate'].map('{:.2f}%'.format)
             formatted_acct['% of Portfolio'] = formatted_acct['% of Portfolio'].map('{:.2f}%'.format)
-            
+
             st.dataframe(formatted_acct, width='stretch', hide_index=True)
-            
+
+        # ======================================================================
+        # MULTI-YEAR PORTFOLIO SUMMARY (per-account Ending Value/Cash Flow/Gain/Return)
+        # ======================================================================
+        st.markdown("---")
+        st.subheader("📈 Multi-Year Portfolio Summary")
+
+        history_sheets, history_years = load_historical_portfolio_data()
+
+        if history_years:
+            recent_years = history_years[-5:] if len(history_years) >= 5 else history_years
+            latest_year = history_years[-1]
+            latest_year_col = str(latest_year)
+
+            def latest_total(sheet_name, label):
+                df = history_sheets.get(sheet_name)
+                if df is None or latest_year_col not in df.columns:
+                    return None
+                row = df.loc[df['Account'] == label]
+                if row.empty:
+                    return None
+                val = row.iloc[0][latest_year_col]
+                return val if pd.notna(val) else None
+
+            grand_end = latest_total('EndingValue', 'Grand Total')
+            grand_cf = latest_total('CashFlow', 'Grand Total')
+            grand_gain = latest_total('Gain', 'Grand Total')
+            grand_ret = latest_total('Return', 'Grand Total')
+
+            period_label = "Year-to-Date" if latest_year == datetime.now().year else "Full Year"
+            st.caption(f"{period_label} — {latest_year} (Grand Total across all accounts)")
+
+            col_h1, col_h2, col_h3, col_h4 = st.columns(4)
+            col_h1.metric("Ending Value", f"${grand_end:,.0f}" if grand_end is not None else "N/A")
+            cf_prefix = "+" if (grand_cf is not None and grand_cf >= 0) else ""
+            col_h2.metric("Cash Flow (Net)", f"{cf_prefix}${grand_cf:,.0f}" if grand_cf is not None else "N/A")
+            gain_prefix2 = "+" if (grand_gain is not None and grand_gain >= 0) else ""
+            col_h3.metric("Market Gain", f"{gain_prefix2}${grand_gain:,.0f}" if grand_gain is not None else "N/A")
+            col_h4.metric("Return", f"{grand_ret * 100:,.2f}%" if grand_ret is not None else "N/A")
+
+            def grand_all_years(sheet_name):
+                df = history_sheets.get(sheet_name)
+                if df is None:
+                    return {}
+                row = df.loc[df['Account'] == 'Grand Total']
+                if row.empty:
+                    return {}
+                row = row.iloc[0]
+                return {y: row.get(str(y)) for y in history_years if pd.notna(row.get(str(y)))}
+
+            gain_by_year = grand_all_years('Gain')
+            cf_by_year = grand_all_years('CashFlow')
+            ret_by_year = grand_all_years('Return')
+
+            total_gain_all = sum(gain_by_year.values()) if gain_by_year else None
+            total_cf_all = sum(cf_by_year.values()) if cf_by_year else None
+
+            annualized_return = None
+            if ret_by_year:
+                growth_factor = 1.0
+                for r in ret_by_year.values():
+                    growth_factor *= (1 + r)
+                if growth_factor > 0:
+                    annualized_return = growth_factor ** (1.0 / len(ret_by_year)) - 1
+
+            gain_share = (total_gain_all / grand_end * 100) if (total_gain_all is not None and grand_end) else None
+
+            st.caption(f"Since {history_years[0]} ({len(ret_by_year)} years of tracked returns, Grand Total)")
+            col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+            col_s1.metric("Total Gain", f"${total_gain_all:,.0f}" if total_gain_all is not None else "N/A")
+            cf_prefix_all = "+" if (total_cf_all is not None and total_cf_all >= 0) else ""
+            col_s2.metric("Total Cash Flow", f"{cf_prefix_all}${total_cf_all:,.0f}" if total_cf_all is not None else "N/A")
+            col_s3.metric("Annualized Return", f"{annualized_return * 100:,.2f}%" if annualized_return is not None else "N/A")
+            col_s4.metric("Gain Share of Portfolio", f"{gain_share:,.1f}%" if gain_share is not None else "N/A")
+
+            def format_metric_df(df, years, as_percent=False):
+                cols = ['Account'] + [str(y) for y in years]
+                cols = [c for c in cols if c in df.columns]
+                sub = df[cols].copy()
+                for y in years:
+                    ycol = str(y)
+                    if ycol not in sub.columns:
+                        continue
+                    if as_percent:
+                        sub[ycol] = sub[ycol].map(lambda v: f'{v * 100:,.2f}%' if pd.notna(v) else '—')
+                    else:
+                        sub[ycol] = sub[ycol].map(lambda v: f'${v:,.0f}' if pd.notna(v) else '—')
+                return sub
+
+            sub_tab_end, sub_tab_cf, sub_tab_gr = st.tabs(
+                ["🏦 Ending Value", "💵 Cash Flow", "📈 Gain & Return"]
+            )
+
+            with sub_tab_end:
+                df = history_sheets.get('EndingValue')
+                if df is not None:
+                    st.dataframe(format_metric_df(df, recent_years), width='stretch', hide_index=True)
+                    with st.expander(f"View full history since {history_years[0]}"):
+                        st.dataframe(format_metric_df(df, history_years), width='stretch', hide_index=True)
+
+            with sub_tab_cf:
+                df = history_sheets.get('CashFlow')
+                if df is not None:
+                    st.caption("Per-account detail is only tracked from the year this feature went live "
+                               "onward — earlier years show group totals only.")
+                    st.dataframe(format_metric_df(df, recent_years), width='stretch', hide_index=True)
+                    with st.expander(f"View full history since {history_years[0]}"):
+                        st.dataframe(format_metric_df(df, history_years), width='stretch', hide_index=True)
+
+            with sub_tab_gr:
+                df_gain = history_sheets.get('Gain')
+                df_ret = history_sheets.get('Return')
+                st.markdown("###### Gain ($)")
+                if df_gain is not None:
+                    st.dataframe(format_metric_df(df_gain, recent_years), width='stretch', hide_index=True)
+                st.markdown("###### Return (%)")
+                if df_ret is not None:
+                    st.dataframe(format_metric_df(df_ret, recent_years, as_percent=True), width='stretch', hide_index=True)
+                with st.expander(f"View full history since {history_years[0]}"):
+                    st.markdown("###### Gain ($)")
+                    if df_gain is not None:
+                        st.dataframe(format_metric_df(df_gain, history_years), width='stretch', hide_index=True)
+                    st.markdown("###### Return (%)")
+                    if df_ret is not None:
+                        st.dataframe(format_metric_df(df_ret, history_years, as_percent=True), width='stretch', hide_index=True)
+
+            st.markdown("---")
+
+            def grand_row_series(sheet_name):
+                df = history_sheets.get(sheet_name)
+                if df is None:
+                    return None
+                row = df.loc[df['Account'] == 'Grand Total']
+                return row.iloc[0] if not row.empty else None
+
+            end_row = grand_row_series('EndingValue')
+            cf_row = grand_row_series('CashFlow')
+            gain_row = grand_row_series('Gain')
+
+            trend_df = pd.DataFrame({
+                'Year': [str(y) for y in history_years],
+                'EndingValue': [end_row.get(str(y)) if end_row is not None else None for y in history_years],
+            }).dropna(subset=['EndingValue'])
+
+            flow_gain_df = pd.DataFrame({
+                'Year': [str(y) for y in history_years],
+                'Cash Flow': [cf_row.get(str(y)) if cf_row is not None else None for y in history_years],
+                'Market Gain': [gain_row.get(str(y)) if gain_row is not None else None for y in history_years],
+            }).dropna(subset=['Cash Flow', 'Market Gain'], how='all')
+
+            hist_cols2 = st.columns([1, 1])
+            with hist_cols2[0]:
+                st.markdown("#### Portfolio Value Over Time")
+                if not trend_df.empty:
+                    line_chart2 = alt.Chart(trend_df).mark_line(point=True, color='#0d6efd').encode(
+                        x=alt.X('Year:N', title='Year'),
+                        y=alt.Y('EndingValue:Q', title='Ending Value ($)'),
+                        tooltip=['Year:N', alt.Tooltip('EndingValue:Q', format=',.0f')]
+                    ).properties(height=280, width=420)
+                    st.altair_chart(line_chart2, width='stretch')
+
+            with hist_cols2[1]:
+                st.markdown("#### Cash Flow vs. Market Gain")
+                if not flow_gain_df.empty:
+                    melted_flow_df = pd.melt(
+                        flow_gain_df, id_vars=['Year'], value_vars=['Cash Flow', 'Market Gain'],
+                        var_name='Type', value_name='Amount'
+                    )
+                    stacked_bar = alt.Chart(melted_flow_df).mark_bar().encode(
+                        x=alt.X('Year:N', title='Year'),
+                        y=alt.Y('Amount:Q', title='Value ($)'),
+                        color=alt.Color('Type:N', scale=alt.Scale(
+                            domain=['Cash Flow', 'Market Gain'], range=['#0d6efd', '#2ca02c'])),
+                        tooltip=['Year:N', 'Type:N', alt.Tooltip('Amount:Q', format=',.0f')]
+                    ).properties(height=280, width=420)
+                    st.altair_chart(stacked_bar, width='stretch')
+
+            # Account-mapping alerts from the last portfolio_history_backend.py run - the
+            # sidebar button only shows a generic success message, so this is otherwise
+            # console-only output.
+            portfolio_alerts = parse_portfolio_history_alerts()
+            if portfolio_alerts and not portfolio_alerts.get("error") and (
+                portfolio_alerts['skipped'] or portfolio_alerts['unmapped_investment'] or portfolio_alerts['other']
+            ):
+                st.markdown("### 🚨 Portfolio History Alerts")
+                st.caption(f"Log generated from run file dating: {portfolio_alerts.get('file_date', 'N/A')}")
+
+                if portfolio_alerts['skipped']:
+                    with st.expander("⚠️ Accounts Skipped (not in account_mapping.csv)"):
+                        st.markdown(
+                            f"""<div class="alert-card alert-danger" style="margin: 0; padding: 10px;">
+                            These accounts showed up in the latest portfolio snapshot but aren't in
+                            <code>account_mapping.csv</code>, so they were skipped this run.
+                            <ul style="margin-top: 5px; margin-bottom: 0;">
+                                {"".join([f"<li>{a}</li>" for a in portfolio_alerts['skipped']])}
+                            </ul>
+                            </div>""", unsafe_allow_html=True
+                        )
+
+                if portfolio_alerts['unmapped_investment']:
+                    with st.expander("📋 Possible Unmapped Investment Accounts"):
+                        st.markdown(
+                            f"""<div class="alert-card alert-warning" style="margin: 0; padding: 10px;">
+                            These Empower accounts look investment-related but aren't in
+                            <code>account_mapping.csv</code> - check if any should be added.
+                            <ul style="margin-top: 5px; margin-bottom: 0;">
+                                {"".join([f"<li>{a}</li>" for a in portfolio_alerts['unmapped_investment']])}
+                            </ul>
+                            </div>""", unsafe_allow_html=True
+                        )
+
+                if portfolio_alerts['other']:
+                    with st.expander("🔎 Other Warnings"):
+                        st.markdown(
+                            f"""<div class="alert-card alert-warning" style="margin: 0; padding: 10px;">
+                            <ul style="margin-top: 5px; margin-bottom: 0;">
+                                {"".join([f"<li>{a}</li>" for a in portfolio_alerts['other']])}
+                            </ul>
+                            </div>""", unsafe_allow_html=True
+                        )
+        else:
+            st.info("No multi-year portfolio history found. Run `python portfolio_history_backend.py --seed` "
+                     "once to import your historical tracking sheet, then use the sidebar's "
+                     "'Update Portfolio History' button to keep it current.")
+
     else:
         st.info("No Portfolio summaries found in output folder. Drop brokerage exports into 'financial_data/input/' and use sidebar to Sync.")
 
