@@ -236,10 +236,16 @@ def parse_alerts_log():
     Parses the generated alerts.txt file from expense output folder
     to display category warnings and big transactions on the frontend.
     """
-    alert_files = glob.glob(os.path.join(FINANCIAL_DATA_OUTPUT, '*_alerts.txt'))
+    # '*_alerts.txt' also matches '{year}_portfolio_alerts.txt' (written by
+    # portfolio_history_backend.py, parsed separately below) - exclude it so a
+    # more recent portfolio sync doesn't shadow the expense alerts file.
+    alert_files = [
+        f for f in glob.glob(os.path.join(FINANCIAL_DATA_OUTPUT, '*_alerts.txt'))
+        if not f.endswith('_portfolio_alerts.txt')
+    ]
     if not alert_files:
         return None
-    
+
     latest_alert_file = max(alert_files, key=os.path.getmtime)
     
     unmapped_categories = []
