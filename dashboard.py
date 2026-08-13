@@ -10,6 +10,8 @@ import subprocess
 import sys
 import faulthandler
 
+from financial_paths import INPUT_DIR as FINANCIAL_DATA_INPUT, OUTPUT_DIR as FINANCIAL_DATA_OUTPUT
+
 # Enable C-level crash tracing for the main Streamlit process
 faulthandler.enable()
 
@@ -58,13 +60,6 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
-
-# Define project directories matching the backends
-FINANCIAL_DATA_INPUT = 'financial_data/input'
-FINANCIAL_DATA_OUTPUT = 'financial_data/output'
-EXPENSE_DATA_INPUT = 'expense_data/input'
-EXPENSE_DATA_OUTPUT = 'expense_data/output'
-
 
 # Column-config helpers so tables stay numeric under the hood (correct header-click
 # sorting in st.dataframe) instead of pre-formatted into display strings.
@@ -158,8 +153,8 @@ def auto_run_pipelines_if_needed():
     portfolio_outputs = glob.glob(os.path.join(FINANCIAL_DATA_OUTPUT, 'Master_Account_Summary_*.csv'))
     
     # Check Expense
-    expense_inputs = glob.glob(os.path.join(EXPENSE_DATA_INPUT, '*transactions*.csv')) + glob.glob(os.path.join(EXPENSE_DATA_INPUT, 'Yearly_budget.xlsx'))
-    expense_outputs = glob.glob(os.path.join(EXPENSE_DATA_OUTPUT, 'Yearly_budget.xlsx'))
+    expense_inputs = glob.glob(os.path.join(FINANCIAL_DATA_INPUT, '*transactions*.csv')) + glob.glob(os.path.join(FINANCIAL_DATA_INPUT, 'Yearly_budget.xlsx'))
+    expense_outputs = glob.glob(os.path.join(FINANCIAL_DATA_OUTPUT, 'Yearly_budget.xlsx'))
     
     status_msg = []
     
@@ -189,7 +184,7 @@ def parse_alerts_log():
     Parses the generated alerts.txt file from expense output folder
     to display category warnings and big transactions on the frontend.
     """
-    alert_files = glob.glob(os.path.join(EXPENSE_DATA_OUTPUT, '*_alerts.txt'))
+    alert_files = glob.glob(os.path.join(FINANCIAL_DATA_OUTPUT, '*_alerts.txt'))
     if not alert_files:
         return None
     
@@ -301,10 +296,10 @@ def load_historical_budget_data():
     Dynamically loads and parses Yearly_budget.xlsx from the output folder.
     Returns: DataFrames for Expenses and Income, a list of years tracked, and total metrics.
     """
-    output_path = os.path.join(EXPENSE_DATA_OUTPUT, 'Yearly_budget.xlsx')
+    output_path = os.path.join(FINANCIAL_DATA_OUTPUT, 'Yearly_budget.xlsx')
     # Fallback to input if output hasn't been generated yet
     if not os.path.exists(output_path):
-        output_path = os.path.join(EXPENSE_DATA_INPUT, 'Yearly_budget.xlsx')
+        output_path = os.path.join(FINANCIAL_DATA_INPUT, 'Yearly_budget.xlsx')
         if not os.path.exists(output_path):
             return None, None, [], {}, {}
             

@@ -3,7 +3,7 @@ The python scripts handle both portfolio and expense from outside sources, gener
 ## Portfolio data
 Under finacial_data/input, take downloaded position and income files from schwab, supplemented by position file from fidelity, generate a account summary csv file, with account, sumbol, market value, cost basis and estimated annual income. 
 ## Budget data
-Under expense_data/input, take downloaded transaction file from Empower Personal Dashboard (usually YTD), combined with a multi-year Yearly_budget.xlsx spreadsheet, the run will produce a pivot style output with detailed expense, income and transfer organized monthly, update the Yearly_budget.xlsx
+Under financial_data/input, take downloaded transaction file from Empower Personal Dashboard (usually YTD), combined with a multi-year Yearly_budget.xlsx spreadsheet, the run will produce a pivot style output with detailed expense, income and transfer organized monthly, update the Yearly_budget.xlsx
 ## Dashboard
 Both outputs are reflected in the common dashboard, with Portfolio and Expense tabs
 
@@ -18,7 +18,7 @@ Both outputs are reflected in the common dashboard, with Portfolio and Expense t
 - Setup a Yearly_budget.xlsx as a multi-year tracking with income and expense tabs
 - Setup category_type_mapping.csv for any category you want to map to expense/income/transfer
 - Setup budget_category_aiases.csv for any customized category you want to use
-- Put all speadsheet files under subdirectory expense_data/input
+- Put all speadsheet files under subdirectory financial_data/input
 
 ## Run
 ```bash

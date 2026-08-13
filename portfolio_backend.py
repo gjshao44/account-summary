@@ -4,6 +4,12 @@ import os
 from datetime import datetime
 import io
 
+from financial_paths import (
+    INPUT_DIR, CONFIG_DIR, OUTPUT_DIR,
+    ASSET_ALLOCATION_MAPPING_PATH,
+    ensure_dirs,
+)
+
 def parse_schwab_multi_account_csv(filepath):
     all_data = []
     current_account = None
@@ -163,15 +169,13 @@ def clean_currency(value):
     return pd.to_numeric(value, errors='coerce')
 
 def run_portfolio_workflow():
-    data_dir = 'financial_data/input' 
-    output_dir = 'financial_data/output'
-    if not os.path.exists(output_dir): os.makedirs(output_dir)
-    
+    ensure_dirs()
+
     # 1. Locate the latest files
-    schwab_files = glob.glob(os.path.join(data_dir, 'All-Accounts-Positions-*-*-*.csv'))
-    income_files = glob.glob(os.path.join(data_dir, 'XXXX*_InvestmentIncome_*-*.CSV'))
-    fidelity_files = glob.glob(os.path.join(data_dir, 'Portfolio_Positions*'))
-    mapping_file = os.path.join(data_dir, 'asset_allocation_mapping.csv')
+    schwab_files = glob.glob(os.path.join(INPUT_DIR, 'All-Accounts-Positions-*-*-*.csv'))
+    income_files = glob.glob(os.path.join(INPUT_DIR, 'XXXX*_InvestmentIncome_*-*.CSV'))
+    fidelity_files = glob.glob(os.path.join(INPUT_DIR, 'Portfolio_Positions*'))
+    mapping_file = ASSET_ALLOCATION_MAPPING_PATH
     
     if not (schwab_files and income_files):
         print("Error: Required Schwab or Income input files not found in directory.")
@@ -302,7 +306,7 @@ def run_portfolio_workflow():
     
     # 5. Generate Output
     timestamp = datetime.now().strftime("%Y%m%d")
-    master_summary_path = os.path.join(output_dir, f'Master_Account_Summary_{timestamp}.csv')
+    master_summary_path = os.path.join(OUTPUT_DIR, f'Master_Account_Summary_{timestamp}.csv')
     
     master_df.to_csv(master_summary_path, index=False)
     print(f"Workflow complete. File generated: {master_summary_path}")    

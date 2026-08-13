@@ -12,9 +12,9 @@ Run it each time you download a fresh export:
     python expense_budget_backend.py
 
 Directory layout (created automatically if missing):
-    expense_data/
+    financial_data/
         input/    <- drop the raw Empower CSV export and Yearly_budget.xlsx here
-                  <- category_type_mapping.csv, budget_category_aliases.csv (edit these directly)
+        config/   <- category_type_mapping.csv, budget_category_aliases.csv (edit these directly)
         output/   <- {year}_transactions_processed.xlsx and updated Yearly_budget.xlsx land here
 """
 import glob
@@ -29,13 +29,12 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
-BASE_DIR = 'expense_data'
-INPUT_DIR = os.path.join(BASE_DIR, 'input')
-CONFIG_DIR = os.path.join(BASE_DIR, 'input')
-OUTPUT_DIR = os.path.join(BASE_DIR, 'output')
-
-CATEGORY_TYPE_MAP_PATH = os.path.join(CONFIG_DIR, 'category_type_mapping.csv')
-BUDGET_ALIAS_MAP_PATH = os.path.join(CONFIG_DIR, 'budget_category_aliases.csv')
+from financial_paths import (
+    BASE_DIR, INPUT_DIR, CONFIG_DIR, OUTPUT_DIR,
+    CATEGORY_TYPE_MAPPING_PATH as CATEGORY_TYPE_MAP_PATH,
+    BUDGET_CATEGORY_ALIASES_PATH as BUDGET_ALIAS_MAP_PATH,
+    ensure_dirs,
+)
 
 MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
@@ -55,11 +54,6 @@ FALLBACK_ABS_THRESHOLD = 2000.0
 # ---------------------------------------------------------------------------
 # Setup / config helpers
 # ---------------------------------------------------------------------------
-
-def ensure_dirs():
-    for d in (INPUT_DIR, CONFIG_DIR, OUTPUT_DIR):
-        os.makedirs(d, exist_ok=True)
-
 
 def load_category_type_map():
     """Category -> Type (Expense/Income/Transfer). Edit the CSV directly to add new categories."""

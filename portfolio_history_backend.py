@@ -27,12 +27,11 @@ Two modes:
 Directory layout:
     financial_data/
         input/    <- summary_investment_eoy.xlsx (seed source, one-time)
-                  <- account_mapping.csv, cashflow_categories.csv (edit directly)
                   <- Portfolio_History.xlsx (working copy, source of truth)
+                  <- *_transactions.csv (Empower export, also used by the expense pipeline)
+        config/   <- account_mapping.csv, cashflow_categories.csv (edit directly)
         output/   <- Master_Account_Summary_*.csv (from portfolio_backend.py)
                   <- Portfolio_History.xlsx (freshly computed current-year column)
-    expense_data/
-        input/    <- *_transactions.csv (Empower export, also used by the expense pipeline)
 """
 import glob
 import os
@@ -45,15 +44,16 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
-FIN_BASE_DIR = 'financial_data'
-FIN_INPUT_DIR = os.path.join(FIN_BASE_DIR, 'input')
-FIN_OUTPUT_DIR = os.path.join(FIN_BASE_DIR, 'output')
-
-EXP_INPUT_DIR = os.path.join('expense_data', 'input')
+from financial_paths import (
+    BASE_DIR as FIN_BASE_DIR,
+    INPUT_DIR as FIN_INPUT_DIR,
+    CONFIG_DIR as FIN_CONFIG_DIR,
+    OUTPUT_DIR as FIN_OUTPUT_DIR,
+    ACCOUNT_MAPPING_PATH,
+    CASHFLOW_CATEGORIES_PATH,
+)
 
 LEGACY_WORKBOOK_PATH = os.path.join(FIN_INPUT_DIR, 'summary_investment_eoy.xlsx')
-ACCOUNT_MAPPING_PATH = os.path.join(FIN_INPUT_DIR, 'account_mapping.csv')
-CASHFLOW_CATEGORIES_PATH = os.path.join(FIN_INPUT_DIR, 'cashflow_categories.csv')
 PORTFOLIO_HISTORY_INPUT_PATH = os.path.join(FIN_INPUT_DIR, 'Portfolio_History.xlsx')
 PORTFOLIO_HISTORY_OUTPUT_PATH = os.path.join(FIN_OUTPUT_DIR, 'Portfolio_History.xlsx')
 
@@ -381,9 +381,9 @@ def load_latest_ending_values(mapping_df):
 def load_cashflow_by_account(mapping_df, cashflow_categories, target_year):
     """Latest Empower transactions CSV -> {CanonicalAccount: net cash flow} for
     Auto-source accounts, restricted to the configured cash-flow categories."""
-    txn_path = find_input_file(EXP_INPUT_DIR, ['*_thru_*_transactions.csv', '*transactions*.csv'])
+    txn_path = find_input_file(FIN_INPUT_DIR, ['*_thru_*_transactions.csv', '*transactions*.csv'])
     if not txn_path:
-        msg = f"No transactions CSV found in {EXP_INPUT_DIR} - Cash Flow left blank for Auto accounts this run."
+        msg = f"No transactions CSV found in {FIN_INPUT_DIR} - Cash Flow left blank for Auto accounts this run."
         print(f"NOTE: {msg}")
         return {}, [], msg
 
