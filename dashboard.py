@@ -7,10 +7,11 @@ import altair as alt
 from datetime import datetime
 import openpyxl
 import subprocess
+import shutil
 import sys
 import faulthandler
 
-from financial_paths import INPUT_DIR as FINANCIAL_DATA_INPUT, OUTPUT_DIR as FINANCIAL_DATA_OUTPUT
+from financial_paths import INPUT_DIR as FINANCIAL_DATA_INPUT, OUTPUT_DIR as FINANCIAL_DATA_OUTPUT, BASE_DIR as FINANCIAL_DATA_BASE
 
 # Enable C-level crash tracing for the main Streamlit process
 faulthandler.enable()
@@ -57,6 +58,20 @@ st.markdown("""
     .alert-info {
         background-color: rgba(13, 110, 253, 0.1);
         border-left-color: #0d6efd;
+    }
+
+    /* Calmer color for primary buttons (e.g. "Sync All") instead of Streamlit's
+       default bright red - scoped to this element only, doesn't touch the
+       app-wide theme (so light/dark mode still follows the user's setting). */
+    button[data-testid="stBaseButton-primary"] {
+        background-color: #0d6efd !important;
+        border-color: #0d6efd !important;
+    }
+    button[data-testid="stBaseButton-primary"]:hover,
+    button[data-testid="stBaseButton-primary"]:focus:not(:active) {
+        background-color: #0b5ed7 !important;
+        border-color: #0b5ed7 !important;
+        color: #ffffff !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -135,6 +150,43 @@ def trigger_portfolio_history_pipeline():
         return False, f"Portfolio History Pipeline process disrupted:\n{error_msg}"
     except Exception as e:
         return False, f"Portfolio History Pipeline process disrupted: {e}"
+
+
+def trigger_all_pipelines():
+    """Runs all 3 backends in dependency order (Portfolio History reads the
+    Master_Account_Summary_*.csv that the Portfolio pipeline just wrote)."""
+    steps = [
+        ("Portfolio", trigger_portfolio_pipeline),
+        ("Portfolio History", trigger_portfolio_history_pipeline),
+        ("Expense/Budget", trigger_expense_pipeline),
+    ]
+    results = []
+    for name, trigger_fn in steps:
+        with st.spinner(f"Syncing {name}..."):
+            success, msg = trigger_fn()
+        results.append((name, success, msg))
+    return results
+
+
+def promote_output_to_input(filename):
+    """Copies a reviewed file from financial_data/output back over the working
+    copy in financial_data/input (the source of truth the backends read from
+    on their next run), keeping a backup of what it replaces."""
+    src = os.path.join(FINANCIAL_DATA_OUTPUT, filename)
+    dst = os.path.join(FINANCIAL_DATA_INPUT, filename)
+    if not os.path.exists(src):
+        return False, f"No {filename} found in output/ yet - run a sync first."
+
+    if os.path.exists(dst):
+        backup_dir = os.path.join(FINANCIAL_DATA_BASE, 'backup')
+        os.makedirs(backup_dir, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        stem, ext = os.path.splitext(filename)
+        backup_path = os.path.join(backup_dir, f'{stem}_{timestamp}{ext}')
+        shutil.copy2(dst, backup_path)
+
+    shutil.copy2(src, dst)
+    return True, f"Promoted {filename} to input/ (previous copy backed up to financial_data/backup/)."
 
 
 # STREAMING_CHUNK: Managing automatic execution schedules...
@@ -446,9 +498,9 @@ with st.sidebar:
     st.image("https://img.icons8.com/fluent/96/000000/money-bag.png", width=64)
     st.title("Sync & Refresh")
     st.write("Update your account and budget data")
-    
+
     st.markdown("---")
-    
+
     # Portfolio Control
     st.subheader("💼 Investment Statements")
     if st.button("🔄 Sync Brokerage Data"):
@@ -479,6 +531,44 @@ with st.sidebar:
             st.success(msg)
         else:
             st.error(msg)
+
+    # Runs all 3 backends in one click, in dependency order
+    if st.button("⚡ Sync All 3 Pipelines", type="primary", use_container_width=True):
+        for name, success, msg in trigger_all_pipelines():
+            if success:
+                st.success(f"{name}: {msg}")
+            else:
+                st.error(f"{name}: {msg}")
+
+    st.markdown("---")
+
+    # Promote reviewed output files back to input/ (the working copy the
+    # backends treat as source of truth on their next run)
+    st.subheader("✅ Promote Reviewed Files")
+    st.caption("Once you're happy with the numbers in output/, replace the working copy in input/.")
+
+    for label, filename in [
+        ("Yearly_budget.xlsx", "Yearly_budget.xlsx"),
+        ("Portfolio_History.xlsx", "Portfolio_History.xlsx"),
+    ]:
+        confirm_key = f"confirm_promote_{filename}"
+        has_output = os.path.exists(os.path.join(FINANCIAL_DATA_OUTPUT, filename))
+
+        if st.button(f"📥 Promote {label}", key=f"promote_btn_{filename}", disabled=not has_output):
+            st.session_state[confirm_key] = True
+
+        if st.session_state.get(confirm_key):
+            st.warning(f"This overwrites input/{filename} with the reviewed output copy.")
+            confirm_col, cancel_col = st.columns(2)
+            if confirm_col.button("✅ Confirm", key=f"promote_yes_{filename}"):
+                st.session_state[confirm_key] = False
+                success, msg = promote_output_to_input(filename)
+                if success:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+            if cancel_col.button("Cancel", key=f"promote_no_{filename}"):
+                st.session_state[confirm_key] = False
 
     st.markdown("---")
     st.caption("Active Workspace Year: 2026")
