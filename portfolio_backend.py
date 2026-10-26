@@ -19,8 +19,9 @@ def parse_schwab_multi_account_csv(filepath):
         for line in f:
             line = line.strip()
             
-            if line and not line.startswith('"') and '...' in line:
-                current_account = line.split('...')[0].strip()
+            unquoted_line = line.strip('"')
+            if unquoted_line and '...' in unquoted_line and ',' not in unquoted_line and '"Symbol"' not in line:
+                current_account = unquoted_line.split('...')[0].strip()
                 continue
             
             if '"Symbol"' in line:
@@ -170,6 +171,15 @@ def clean_currency(value):
 
 def run_portfolio_workflow():
     ensure_dirs()
+
+    # 0. If Schwab API sync is enabled, refresh INPUT_DIR from the API first.
+    # Everything below this is untouched -- the API sync's only job is to
+    # drop a correctly-shaped file before the existing glob-and-parse logic
+    # runs, so manual CSV upload keeps working as a permanent fallback.
+    from schwab_client import load_automation_config
+    if load_automation_config().get('data_source_mode') == 'api':
+        from schwab_sync_backend import run_schwab_api_sync
+        run_schwab_api_sync()
 
     # 1. Locate the latest files
     schwab_files = glob.glob(os.path.join(INPUT_DIR, 'All-Accounts-Positions-*-*-*.csv'))

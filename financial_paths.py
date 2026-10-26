@@ -26,6 +26,15 @@ ASSET_ALLOCATION_MAPPING_PATH = os.path.join(CONFIG_DIR, 'asset_allocation_mappi
 ACCOUNT_MAPPING_PATH = os.path.join(CONFIG_DIR, 'account_mapping.csv')
 CASHFLOW_CATEGORIES_PATH = os.path.join(CONFIG_DIR, 'cashflow_categories.csv')
 
+# Schwab API integration (credentials/token files are gitignored via the
+# blanket /financial_data ignore; never hand-edit schwab_token.json)
+SCHWAB_CREDENTIALS_PATH = os.path.join(CONFIG_DIR, 'schwab_credentials.json')
+SCHWAB_TOKEN_PATH = os.path.join(CONFIG_DIR, 'schwab_token.json')
+SCHWAB_ACCOUNTS_PATH = os.path.join(CONFIG_DIR, 'schwab_accounts.csv')
+SCHWAB_AUTOMATION_CONFIG_PATH = os.path.join(CONFIG_DIR, 'schwab_automation_config.json')
+SCHWAB_NOTIFY_CONFIG_PATH = os.path.join(CONFIG_DIR, 'schwab_notify.json')
+SCHWAB_AUTOMATION_STATE_PATH = os.path.join(CONFIG_DIR, 'schwab_automation_state.json')
+
 
 def ensure_dirs():
     for d in (INPUT_DIR, CONFIG_DIR, OUTPUT_DIR):

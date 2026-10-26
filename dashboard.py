@@ -152,6 +152,70 @@ def trigger_portfolio_history_pipeline():
         return False, f"Portfolio History Pipeline process disrupted: {e}"
 
 
+def trigger_schwab_sync():
+    """Runs the Schwab API positions/income sync (writes into financial_data/input/,
+    then the normal portfolio pipeline picks it up on its next run)."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-X", "faulthandler", "schwab_sync_backend.py"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return True, "Schwab API sync finished successfully!"
+    except subprocess.CalledProcessError as e:
+        if e.returncode in [-11, 139]:
+            return False, f"🚨 **SEGMENTATION FAULT DETECTED IN BACKEND** 🚨\n\nStack Trace:\n{e.stderr}"
+
+        error_msg = e.stderr if e.stderr else e.stdout
+        return False, f"Schwab sync process disrupted:\n{error_msg}"
+    except Exception as e:
+        return False, f"Schwab sync process disrupted: {e}"
+
+
+def trigger_schwab_cron_driver():
+    """Manually runs the same entrypoint cron would invoke (token health check
+    + sweep + liquidation, each gated by their own scheduled-day/dry-run logic)."""
+    try:
+        result = subprocess.run(
+            [sys.executable, "-X", "faulthandler", "schwab_cron_driver.py"],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        return True, result.stdout
+    except subprocess.CalledProcessError as e:
+        error_msg = e.stderr if e.stderr else e.stdout
+        return False, f"Schwab automation run disrupted:\n{error_msg}"
+    except Exception as e:
+        return False, f"Schwab automation run disrupted: {e}"
+
+
+def load_schwab_automation_config():
+    from financial_paths import SCHWAB_AUTOMATION_CONFIG_PATH
+    import json
+    if not os.path.exists(SCHWAB_AUTOMATION_CONFIG_PATH):
+        return None
+    with open(SCHWAB_AUTOMATION_CONFIG_PATH, 'r') as f:
+        return json.load(f)
+
+
+def save_schwab_automation_config(cfg):
+    from financial_paths import SCHWAB_AUTOMATION_CONFIG_PATH
+    import json
+    with open(SCHWAB_AUTOMATION_CONFIG_PATH, 'w') as f:
+        json.dump(cfg, f, indent=2)
+
+
+def load_schwab_automation_state():
+    from financial_paths import SCHWAB_AUTOMATION_STATE_PATH
+    import json
+    if not os.path.exists(SCHWAB_AUTOMATION_STATE_PATH):
+        return None
+    with open(SCHWAB_AUTOMATION_STATE_PATH, 'r') as f:
+        return json.load(f)
+
+
 def trigger_all_pipelines():
     """Runs all 3 backends in dependency order (Portfolio History reads the
     Master_Account_Summary_*.csv that the Portfolio pipeline just wrote)."""
@@ -581,7 +645,7 @@ with st.sidebar:
     st.caption("Click the buttons above to manually sync your data.")
 
 # Main multi-tab UI
-tab_inv, tab_exp = st.tabs(["💼 Investment Portfolio", "📊 Cash Flow & Expense"])
+tab_inv, tab_exp, tab_schwab = st.tabs(["💼 Investment Portfolio", "📊 Cash Flow & Expense", "🤖 Schwab Automation"])
 
 
 # STREAMING_CHUNK: Formatting and displaying the Investment allocation tab...
@@ -1097,3 +1161,117 @@ with tab_exp:
             st.success("✨ Zero unmapped categories or extreme transaction anomalies flagged this cycle!")
     else:
         st.info("No transaction spreadsheets found in outputs. Drop transactions CSV and budget templates into 'expense_data/input/' to start calculation workflows.")
+
+
+# ==============================================================================
+# TAB 3: SCHWAB AUTOMATION (API sync, cash sweep, quarterly liquidation)
+# ==============================================================================
+with tab_schwab:
+    st.header("Schwab Automation Status")
+
+    schwab_cfg = load_schwab_automation_config()
+    schwab_state = load_schwab_automation_state()
+
+    if schwab_cfg is None:
+        st.info(
+            "Not configured yet. Complete the Phase 0 setup (register the Schwab "
+            "developer app, fill in `schwab_credentials.json`, run `schwab_auth_init.py` "
+            "and `schwab_account_discovery.py`) before this tab has anything to show."
+        )
+    else:
+        # --- Token / connection health -------------------------------------
+        token_days_left = None
+        if schwab_state and schwab_state.get('token_expires_utc'):
+            try:
+                expires_at = datetime.fromisoformat(schwab_state['token_expires_utc'])
+                token_days_left = (expires_at - datetime.now(expires_at.tzinfo)).total_seconds() / 86400
+            except Exception:
+                token_days_left = None
+
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            if token_days_left is None:
+                st.metric("Refresh Token", "Not connected")
+            else:
+                st.metric("Refresh Token Expires In", f"{token_days_left:.1f} days")
+        with col2:
+            st.metric("Mode", "🔵 DRY RUN" if schwab_cfg['dry_run'] else "🔴 LIVE")
+        with col3:
+            st.metric("Automation", "🟢 ON" if schwab_cfg['automation_enabled'] else "⚪ OFF")
+
+        if token_days_left is not None and token_days_left <= schwab_cfg.get('warn_token_days', 2):
+            st.markdown(
+                f"""<div class="alert-card alert-danger" style="margin: 0; padding: 10px;">
+                Refresh token expires in {token_days_left:.1f} day(s). Run <code>schwab_auth_init.py</code>
+                to re-authenticate before the Tue/Fri sweep and quarterly liquidation silently stop working.
+                </div>""", unsafe_allow_html=True
+            )
+
+        st.markdown("---")
+
+        # --- Toggles (read-modify-write schwab_automation_config.json) -----
+        st.subheader("Controls")
+        tcol1, tcol2 = st.columns(2)
+        with tcol1:
+            new_enabled = st.toggle("Automation enabled", value=schwab_cfg['automation_enabled'],
+                                     help="Master on/off switch. When off, schwab_cron_driver.py only checks token health and does nothing else.")
+        with tcol2:
+            new_dry_run = st.toggle("Dry run", value=schwab_cfg['dry_run'],
+                                     help="While on, orders are logged but never actually placed. Turn off only after reviewing several dry-run cycles.")
+
+        if new_enabled != schwab_cfg['automation_enabled'] or new_dry_run != schwab_cfg['dry_run']:
+            schwab_cfg['automation_enabled'] = new_enabled
+            schwab_cfg['dry_run'] = new_dry_run
+            save_schwab_automation_config(schwab_cfg)
+            st.success("Settings saved.")
+            st.rerun()
+
+        if not schwab_cfg['dry_run'] and schwab_cfg['automation_enabled']:
+            st.markdown(
+                """<div class="alert-card alert-warning" style="margin: 0; padding: 10px;">
+                Live trading is ON. Scheduled runs will place real orders.
+                </div>""", unsafe_allow_html=True
+            )
+
+        bcol1, bcol2 = st.columns(2)
+        with bcol1:
+            if st.button("🔄 Run Schwab Sync Now", help="Fetches positions/income from the API into financial_data/input/"):
+                with st.spinner("Syncing with Schwab API..."):
+                    success, msg = trigger_schwab_sync()
+                st.success(msg) if success else st.error(msg)
+        with bcol2:
+            if st.button("▶️ Run Automation Check Now", help="Manually runs the same check cron would run (token health + sweep + liquidation, each still gated by their own scheduled-day logic)"):
+                with st.spinner("Running Schwab automation check..."):
+                    success, msg = trigger_schwab_cron_driver()
+                st.success(msg) if success else st.error(msg)
+                st.rerun()
+
+        st.markdown("---")
+
+        # --- Last actions -----------------------------------------------------
+        st.subheader("Last Actions")
+        lcol1, lcol2 = st.columns(2)
+        with lcol1:
+            st.markdown("**Last cash sweep**")
+            last_sweep = schwab_state.get('last_sweep') if schwab_state else None
+            st.json(last_sweep) if last_sweep else st.caption("No sweep has run yet.")
+        with lcol2:
+            st.markdown("**Last quarterly liquidation**")
+            last_liq = schwab_state.get('last_liquidation') if schwab_state else None
+            st.json(last_liq) if last_liq else st.caption("No liquidation has run yet.")
+
+        if schwab_state and schwab_state.get('last_error'):
+            st.markdown(
+                f"""<div class="alert-card alert-danger" style="margin: 0; padding: 10px;">
+                Last error: {schwab_state['last_error']}
+                </div>""", unsafe_allow_html=True
+            )
+
+        st.markdown("---")
+        st.caption(
+            f"Scheduled sweep days: {', '.join(schwab_cfg['sweep_days'])} • "
+            f"Quarterly liquidation months: {', '.join(str(m) for m in schwab_cfg['liquidate_months'])} • "
+            f"No sweep buys from the prior month's last day through day {schwab_cfg['sweep_blackout_end_day']} • "
+            f"Sweep symbol: {schwab_cfg['sweep_symbol']}"
+        )
+        st.caption("Installing the actual cron job is a separate, manual go-live step -- not controlled from this dashboard.")
