@@ -1238,7 +1238,7 @@ with tab_schwab:
 
         bcol1, bcol2 = st.columns(2)
         with bcol1:
-            if st.button("🔄 Run Schwab Sync Now", help="Fetches positions/income from the API into financial_data/input/"):
+            if st.button("🔄 Run Schwab Sync Now", help="Fetches positions from the API into financial_data/input/ (income CSV is still downloaded manually)"):
                 with st.spinner("Syncing with Schwab API..."):
                     success, msg = trigger_schwab_sync()
                 st.success(msg) if success else st.error(msg)

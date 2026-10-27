@@ -1,25 +1,20 @@
 """
-Phase 1: pulls positions and trailing dividend/interest income from the
-Schwab Trader API and writes them into financial_data/input/ using the EXACT
-filename and column conventions portfolio_backend.py already globs for and
+Phase 1: pulls positions from the Schwab Trader API and writes them into
+financial_data/input/ using the EXACT filename and column conventions portfolio_backend.py already globs for and
 parses (see parse_schwab_multi_account_csv() and run_portfolio_workflow()).
 This means nothing downstream of input/ needs to change -- the API sync's
 only job is "fetch, then drop a correctly-shaped file before the existing
 pipeline runs."
 
-KNOWN GAP (flagged in the plan, not yet resolved): Schwab's Trader API has no
-confirmed endpoint matching the retail UI's "Income Summary -- next 12
-months" forward projection. fetch_projected_income() below instead sums each
-account's ACTUAL dividend/interest transactions over the trailing 12 months
-as the closest available proxy. This is logged explicitly (method="trailing_12mo_actual")
-so a future maintainer knows the income figures are a trailing-realized
-proxy, not Schwab's own forward projection, until/unless a real projection
-endpoint is confirmed to exist.
+Income is NOT pulled from the API -- keep downloading the Schwab
+"Income Summary -- next 12 months" CSV (XXXX*_InvestmentIncome_*.CSV) by
+hand. The Trader API has no forward income projection, and its
+DIVIDEND_OR_INTEREST transactions carry only a CURRENCY_USD instrument (the
+security appears just as a name in `description`), so they can't be tied
+back to a ticker reliably.
 """
 import os
-from datetime import datetime, timedelta, timezone
-
-import pandas as pd
+from datetime import datetime
 
 from financial_paths import INPUT_DIR, ensure_dirs
 from schwab_client import get_client, get_account_hash_map, get_account_data
@@ -76,66 +71,6 @@ def fetch_all_positions(client, account_map):
     return blocks
 
 
-def fetch_projected_income(client, account_map, lookback_days=365):
-    """Trailing-12-month DIVIDEND_OR_INTEREST transactions per symbol/account,
-    used as a proxy for the "next 12 months" projection -- see module
-    docstring. Returns a DataFrame matching the income CSV's post-parse shape:
-    columns Symbol, AccountName, AnnualIncome."""
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=lookback_days)
-    records = []
-    for canonical_name, row in account_map.items():
-        resp = client.get_transactions(
-            row['HashValue'],
-            start_date=start,
-            end_date=end,
-            transaction_types=client.Transactions.TransactionType.DIVIDEND_OR_INTEREST,
-        )
-        resp.raise_for_status()
-        for txn in resp.json():
-            amount = txn.get('netAmount')
-            symbol = None
-            for item in txn.get('transferItems', []):
-                instrument = item.get('instrument', {})
-                if instrument.get('symbol'):
-                    symbol = instrument['symbol']
-                    if amount is None:
-                        amount = item.get('amount') or item.get('cost')
-                    break
-            if symbol is None or amount is None:
-                print(f"WARNING: unrecognized transaction shape, skipping: {txn}")
-                continue
-            records.append({'Symbol': symbol, 'AccountName': canonical_name, 'Amount': float(amount)})
-
-    if not records:
-        return pd.DataFrame(columns=['Transaction Date', 'Account Number', 'Account Name',
-                                      'Account Type', 'Security Description', 'Symbol',
-                                      'Security Type', 'Transaction Type', 'Transaction Amount',
-                                      'Income Type'])
-
-    df = pd.DataFrame(records)
-    # Emit one row per symbol/account (already trailing-12mo summed amounts
-    # are fine as individual rows too, since run_portfolio_workflow() groups
-    # and sums again -- but summing here keeps the output file small).
-    grouped = df.groupby(['Symbol', 'AccountName'])['Amount'].sum().reset_index()
-
-    out_rows = []
-    for _, r in grouped.iterrows():
-        out_rows.append({
-            'Transaction Date': end.strftime('%m/%d/%Y'),
-            'Account Number': '',
-            'Account Name': r['AccountName'],
-            'Account Type': '',
-            'Security Description': '',
-            'Symbol': r['Symbol'],
-            'Security Type': '',
-            'Transaction Type': 'Dividend',
-            'Transaction Amount': r['Amount'],
-            'Income Type': 'Dividend',
-        })
-    return pd.DataFrame(out_rows)
-
-
 def _write_positions_csv(path, blocks, as_of, account_map):
     ensure_dirs()
     with open(path, 'w', newline='') as f:
@@ -151,13 +86,6 @@ def _write_positions_csv(path, blocks, as_of, account_map):
             f.write("\n")
 
 
-def _write_income_csv(path, income_df, as_of):
-    ensure_dirs()
-    with open(path, 'w', newline='') as f:
-        f.write(f"Investment Income Transactions as of {as_of}\n")
-        income_df.to_csv(f, index=False)
-
-
 def run_schwab_api_sync():
     client = get_client()
     account_map = get_account_hash_map()
@@ -170,11 +98,6 @@ def run_schwab_api_sync():
     positions_path = os.path.join(INPUT_DIR, f"All-Accounts-Positions-{filename_ts}.csv")
     _write_positions_csv(positions_path, positions_blocks, as_of_str, account_map)
     print(f"Wrote {positions_path}")
-
-    income_df = fetch_projected_income(client, account_map)
-    income_path = os.path.join(INPUT_DIR, f"XXXX000_InvestmentIncome_{now.strftime('%Y%m%d-%H%M%S')}.CSV")
-    _write_income_csv(income_path, income_df, as_of_str)
-    print(f"Wrote {income_path} (method=trailing_12mo_actual -- see module docstring)")
 
 
 if __name__ == "__main__":

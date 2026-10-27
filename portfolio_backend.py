@@ -179,7 +179,11 @@ def run_portfolio_workflow():
     from schwab_client import load_automation_config
     if load_automation_config().get('data_source_mode') == 'api':
         from schwab_sync_backend import run_schwab_api_sync
-        run_schwab_api_sync()
+        try:
+            run_schwab_api_sync()
+        except Exception as e:
+            # e.g. expired token -- fall back to the newest positions file on disk.
+            print(f"WARNING: Schwab API sync failed, using latest positions CSV instead: {e}")
 
     # 1. Locate the latest files
     schwab_files = glob.glob(os.path.join(INPUT_DIR, 'All-Accounts-Positions-*-*-*.csv'))
