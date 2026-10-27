@@ -1241,12 +1241,18 @@ with tab_schwab:
             if st.button("🔄 Run Schwab Sync Now", help="Fetches positions from the API into financial_data/input/ (income CSV is still downloaded manually)"):
                 with st.spinner("Syncing with Schwab API..."):
                     success, msg = trigger_schwab_sync()
-                st.success(msg) if success else st.error(msg)
+                if success:
+                    st.success(msg)
+                else:
+                    st.error(msg)
         with bcol2:
             if st.button("▶️ Run Automation Check Now", help="Manually runs the same check cron would run (token health + sweep + liquidation, each still gated by their own scheduled-day logic)"):
                 with st.spinner("Running Schwab automation check..."):
                     success, msg = trigger_schwab_cron_driver()
-                st.success(msg) if success else st.error(msg)
+                if success:
+                    st.success(msg)
+                else:
+                    st.error(msg)
                 st.rerun()
 
         st.markdown("---")
