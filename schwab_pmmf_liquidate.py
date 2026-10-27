@@ -1,6 +1,6 @@
 """
 Phase 2/3: on the first NYSE trading day of each configured quarter-start
-month (Jan/Apr/Jul/Oct by default), sell 100% of the PMMF position back to
+month (Jan/Apr/Jul/Oct by default), sell 100% of the sweep ETF (sweep_symbol) position back to
 cash in every Role=sweep_target account -- ahead of the user's recurring
 quarterly transfer to Fidelity for expenses.
 

@@ -68,7 +68,7 @@ def check_token_health_and_alert_if_expiring(warn_threshold_days=None):
                     f"The Schwab refresh token expires in {info['days_left']:.1f} day(s) "
                     f"(at {info['expires_at_utc']}).\n\n"
                     f"Run schwab_auth_init.py to re-authenticate before then, or the "
-                    f"Tue/Fri cash sweep and quarterly PMMF liquidation will silently stop working."
+                    f"Tue/Fri cash sweep and quarterly sweep-ETF liquidation will silently stop working."
                 ),
             )
             state['last_alert_sent_utc'] = datetime.now(timezone.utc).isoformat()

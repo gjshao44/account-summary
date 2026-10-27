@@ -39,9 +39,9 @@ DEFAULT_AUTOMATION_CONFIG = {
     "liquidate_months": [1, 4, 7, 10],
     # No sweep buys from the last day of the month before a liquidation month
     # through this day of the liquidation month, so cash raised for the
-    # quarterly transfer isn't immediately re-swept into PMMF.
+    # quarterly transfer isn't immediately re-swept into the sweep ETF.
     "sweep_blackout_end_day": 7,
-    "sweep_symbol": "PMMF",
+    "sweep_symbol": "SGOV",
     "alert_email_to": "",
     "data_source_mode": "csv",
     "warn_token_days": 2,

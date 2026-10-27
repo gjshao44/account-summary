@@ -1,9 +1,9 @@
 """
 Phase 2/3: twice-weekly (Tue/Fri by default, configurable) cash sweep into
-PMMF for the accounts marked Role=sweep_target in schwab_accounts.csv.
+the sweep ETF (sweep_symbol, SGOV by default) for the accounts marked Role=sweep_target in schwab_accounts.csv.
 
 "Sweep to $0, no buffer" (the user's explicit choice) is implemented as
-shares = floor(cash_balance / live_price) -- PMMF trades as whole ETF shares
+shares = floor(cash_balance / live_price) -- ETFs trade as whole shares
 only, so a remainder smaller than one share's price is unavoidable and is
 logged rather than force-zeroed.
 """
@@ -24,7 +24,7 @@ def is_scheduled_sweep_day(today, cfg=None):
 def is_in_liquidation_blackout(today, cfg=None):
     """True from the last day of the month preceding a liquidation month
     through day `sweep_blackout_end_day` of the liquidation month (e.g.
-    Mar 31 - Apr 5), so the sweep doesn't buy PMMF right before or right
+    Mar 31 - Apr 5), so the sweep doesn't buy the sweep ETF right before or right
     after the quarterly sell-off."""
     cfg = cfg or load_automation_config()
     if today.month in cfg['liquidate_months'] and today.day <= cfg['sweep_blackout_end_day']:
