@@ -5,8 +5,8 @@ if today qualifies, the cash sweep and/or quarterly liquidation. Idempotent:
 safe to run more than once in a day, or more than once a week, without
 double-acting (each sub-module tracks its own "already did this" state).
 
-Intended crontab line (installed manually, after Phase 3 validation):
-    0 9,15 * * 1-5  cd /home/gjshao/git/account-summary && .venv/bin/python schwab_cron_driver.py >> financial_data/output/schwab_cron.log 2>&1
+Crontab line (machine clock is US/Pacific, so 7:00 and 12:00 = 10:00 and 15:00 ET):
+    0 7,12 * * 1-5  cd /home/gjshao/git/account-summary && .venv/bin/python schwab_cron_driver.py >> financial_data/output/schwab_cron.log 2>&1
 """
 import sys
 import traceback

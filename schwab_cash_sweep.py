@@ -51,6 +51,10 @@ def run_sweep(client=None, today=None):
         return {"status": "SKIPPED", "reason": f"{today} is not a scheduled sweep day"}
     if is_in_liquidation_blackout(today, cfg):
         return {"status": "SKIPPED", "reason": f"{today} is in the quarterly liquidation blackout window"}
+    # Idempotency: cron fires more than once a day; only one live sweep per day.
+    last_sweep = load_state().get('last_sweep') or {}
+    if last_sweep.get('date') == today.isoformat() and not last_sweep.get('dry_run'):
+        return {"status": "SKIPPED", "reason": f"already swept on {today}"}
 
     from schwab_client import get_client
     client = client or get_client()
