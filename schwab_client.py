@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 
 import schwab.auth
 from schwab.orders.equities import equity_buy_market, equity_sell_market
+from schwab.utils import Utils
 
 from financial_paths import (
     CONFIG_DIR,
@@ -221,11 +222,40 @@ def place_equity_order(client, account_hash, symbol, quantity, instruction, dry_
 
     resp = client.place_order(account_hash, order_spec)
     resp.raise_for_status()
-    return {
+    result = {
         "status": "LIVE",
         "account_hash": account_hash,
         "symbol": symbol,
         "quantity": quantity,
         "instruction": instruction,
         "http_status": resp.status_code,
+    }
+    # HTTP 201 only means Schwab received the order -- it can still be
+    # rejected moments later (e.g. "Opening transactions are now restricted
+    # for this security"), so read back the order's actual status.
+    order_id = Utils(client, account_hash).extract_order_id(resp)
+    result["order_id"] = order_id
+    if order_id is not None:
+        result.update(_wait_for_order_status(client, account_hash, order_id))
+    return result
+
+
+TERMINAL_ORDER_STATUSES = {"FILLED", "REJECTED", "CANCELED", "EXPIRED", "REPLACED"}
+
+
+def _wait_for_order_status(client, account_hash, order_id, timeout_seconds=15):
+    order = {}
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        time.sleep(2)
+        resp = client.get_order(order_id, account_hash)
+        if resp.status_code != 200:
+            continue
+        order = resp.json()
+        if order.get("status") in TERMINAL_ORDER_STATUSES:
+            break
+    return {
+        "order_status": order.get("status", "UNKNOWN"),
+        "filled_quantity": order.get("filledQuantity"),
+        "status_description": order.get("statusDescription", ""),
     }

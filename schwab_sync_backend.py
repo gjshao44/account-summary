@@ -44,7 +44,8 @@ def fetch_all_positions(client, account_map):
         rows = []
         for pos in account.get('positions', []):
             instrument = pos.get('instrument', {})
-            symbol = instrument.get('symbol', '')
+            # API uses BRK.B; the CSV export (and asset_allocation_mapping) use BRK/B.
+            symbol = instrument.get('symbol', '').replace('.', '/')
             qty = pos.get('longQuantity', 0) or 0
             market_value = pos.get('marketValue', 0) or 0
             # NOTE: averageCostBasis here is assumed to be a per-share figure
@@ -135,12 +136,14 @@ def fetch_projected_income(client, account_map, lookback_days=365):
     return pd.DataFrame(out_rows)
 
 
-def _write_positions_csv(path, blocks, as_of):
+def _write_positions_csv(path, blocks, as_of, account_map):
     ensure_dirs()
     with open(path, 'w', newline='') as f:
         f.write(_quote(f"Positions for All-Accounts as of {as_of}") + "\n\n")
         for canonical_name, rows in blocks.items():
-            f.write(_quote(canonical_name) + "\n")
+            # parse_schwab_multi_account_csv() detects each account block by
+            # the "Name ...123" header, so the masked number is required.
+            f.write(_quote(f"{canonical_name} {account_map[canonical_name]['MaskedNumber']}") + "\n")
             f.write(",".join(POSITION_COLUMNS) + ",\n")
             for r in rows:
                 f.write(",".join(_quote(r[c]) for c in
@@ -165,7 +168,7 @@ def run_schwab_api_sync():
 
     positions_blocks = fetch_all_positions(client, account_map)
     positions_path = os.path.join(INPUT_DIR, f"All-Accounts-Positions-{filename_ts}.csv")
-    _write_positions_csv(positions_path, positions_blocks, as_of_str)
+    _write_positions_csv(positions_path, positions_blocks, as_of_str, account_map)
     print(f"Wrote {positions_path}")
 
     income_df = fetch_projected_income(client, account_map)

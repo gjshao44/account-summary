@@ -13,9 +13,44 @@ import traceback
 from datetime import date, datetime, timezone
 
 from schwab_client import load_automation_config, load_state, save_state, get_client
-from schwab_alerts import check_token_health_and_alert_if_expiring
+from schwab_alerts import check_token_health_and_alert_if_expiring, send_email
 from schwab_cash_sweep import run_sweep
 from schwab_pmmf_liquidate import run_liquidation
+
+
+def _order_problems(job, run_result):
+    """Live orders that didn't fill (rejected, canceled, still working...)."""
+    problems = []
+    for account, r in (run_result.get('results') or {}).items():
+        if r.get('status') == 'LIVE' and r.get('order_status') != 'FILLED':
+            problems.append(
+                f"{job} {account}: {r['instruction']} {r['quantity']} {r['symbol']} -> "
+                f"{r.get('order_status')} (order {r.get('order_id')}) {r.get('status_description', '')}"
+            )
+    return problems
+
+
+def _alert_problems(problems):
+    print("PROBLEMS:\n" + "\n".join(problems), file=sys.stderr)
+    try:
+        send_email(
+            subject="Schwab automation: action needed",
+            body="The scheduled Schwab run hit problems:\n\n" + "\n\n".join(problems)
+                 + "\n\nSee financial_data/output/schwab_cron.log for details.",
+        )
+    except Exception as e:
+        print(f"Failed to send problem alert email: {e}", file=sys.stderr)
+
+
+def _run_job(job, fn, client, today, problems):
+    try:
+        result = fn(client=client, today=today)
+    except Exception:
+        problems.append(f"{job} crashed:\n{traceback.format_exc()}")
+        return None
+    print(f"{job}: {result}")
+    problems.extend(_order_problems(job, result))
+    return result
 
 
 def main():
@@ -46,17 +81,21 @@ def main():
         save_state(state)
         print(f"FATAL: could not build Schwab client: {e}", file=sys.stderr)
         traceback.print_exc()
+        _alert_problems([f"Could not connect to Schwab (token expired?): {e}"])
         return
 
-    sweep_result = run_sweep(client=client, today=today)
-    print(f"Sweep: {sweep_result}")
-
-    liquidation_result = run_liquidation(client=client, today=today)
-    print(f"Liquidation: {liquidation_result}")
+    problems = []
+    _run_job("Sweep", run_sweep, client, today, problems)
+    _run_job("Liquidation", run_liquidation, client, today, problems)
 
     state = load_state()  # re-read since run_sweep/run_liquidation already wrote state
-    state['last_error'] = None
+    state['last_error'] = (
+        f"{datetime.now(timezone.utc).isoformat()}: " + " | ".join(p.splitlines()[0] for p in problems)
+        if problems else None
+    )
     save_state(state)
+    if problems:
+        _alert_problems(problems)
 
 
 if __name__ == "__main__":
