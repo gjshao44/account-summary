@@ -194,10 +194,13 @@ def trigger_schwab_cron_driver():
 def load_schwab_automation_config():
     from financial_paths import SCHWAB_AUTOMATION_CONFIG_PATH
     import json
+    from schwab_client import DEFAULT_AUTOMATION_CONFIG
     if not os.path.exists(SCHWAB_AUTOMATION_CONFIG_PATH):
         return None
     with open(SCHWAB_AUTOMATION_CONFIG_PATH, 'r') as f:
-        return json.load(f)
+        # Merge over defaults so keys added in code later (e.g.
+        # sweep_blackout_end_day) don't KeyError against an older file.
+        return {**DEFAULT_AUTOMATION_CONFIG, **json.load(f)}
 
 
 def save_schwab_automation_config(cfg):
