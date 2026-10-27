@@ -109,7 +109,7 @@ def parse_fidelity_positions_csv(filepath):
     
     # Clean up standard core cash designations to tidy up output rows
     standard_df = standard_df[~standard_df['Symbol'].str.contains('Pending', case=False, na=False)].copy()
-    standard_df.loc[standard_df['Symbol'].str.contains('Cash|Core|VTEB|PMMF|XX', case=False, na=False), 'Symbol'] = 'CASH'
+    standard_df.loc[standard_df['Symbol'].str.contains('Cash|Core|VTEB|PMMF|SGOV|XX', case=False, na=False), 'Symbol'] = 'CASH'
     
     return standard_df
 
@@ -252,6 +252,9 @@ def run_portfolio_workflow():
     schwab_master['AccountName'] = schwab_master['AccountName_y'].fillna(schwab_master['AccountName_x'])
     schwab_master = schwab_master.drop(columns=['MergeKey', 'AccountName_x', 'AccountName_y'])
     schwab_master['AnnualIncome'] = schwab_master['AnnualIncome'].fillna(0)
+    # SGOV is the cash-sweep ETF; relabel only after the income merge so its
+    # income stays matched to its own position row.
+    schwab_master.loc[schwab_master['Symbol'] == 'SGOV', 'Symbol'] = 'CASH'
 
     # Estimate Fidelity income using the mapped Schwab yields
     if not fidelity_pos.empty:
