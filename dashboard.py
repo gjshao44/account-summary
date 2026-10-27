@@ -1257,11 +1257,17 @@ with tab_schwab:
         with lcol1:
             st.markdown("**Last cash sweep**")
             last_sweep = schwab_state.get('last_sweep') if schwab_state else None
-            st.json(last_sweep) if last_sweep else st.caption("No sweep has run yet.")
+            if last_sweep:
+                st.json(last_sweep)
+            else:
+                st.caption("No sweep has run yet.")
         with lcol2:
             st.markdown("**Last quarterly liquidation**")
             last_liq = schwab_state.get('last_liquidation') if schwab_state else None
-            st.json(last_liq) if last_liq else st.caption("No liquidation has run yet.")
+            if last_liq:
+                st.json(last_liq)
+            else:
+                st.caption("No liquidation has run yet.")
 
         if schwab_state and schwab_state.get('last_error'):
             st.markdown(
