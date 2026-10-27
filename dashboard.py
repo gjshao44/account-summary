@@ -1279,7 +1279,8 @@ with tab_schwab:
         st.markdown("---")
         st.caption(
             f"Scheduled sweep days: {', '.join(schwab_cfg['sweep_days'])} • "
-            f"Quarterly liquidation months: {', '.join(str(m) for m in schwab_cfg['liquidate_months'])} • "
+            f"Quarterly liquidation months: {', '.join(str(m) for m in schwab_cfg['liquidate_months'])} "
+            f"(sell retried each trading day through day {schwab_cfg['liquidate_last_day']}) • "
             f"No sweep buys from the prior month's last day through day {schwab_cfg['sweep_blackout_end_day']} • "
             f"Sweep symbol: {schwab_cfg['sweep_symbol']}"
         )

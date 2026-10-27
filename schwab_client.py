@@ -38,6 +38,9 @@ DEFAULT_AUTOMATION_CONFIG = {
     "automation_enabled": False,
     "sweep_days": ["Tuesday", "Friday"],
     "liquidate_months": [1, 4, 7, 10],
+    # Quarterly sell retries each run through this day of the month (the
+    # Fidelity transfer pulls the cash on the 5th).
+    "liquidate_last_day": 4,
     # No sweep buys from the last day of the month before a liquidation month
     # through this day of the liquidation month, so cash raised for the
     # quarterly transfer isn't immediately re-swept into the sweep ETF.
