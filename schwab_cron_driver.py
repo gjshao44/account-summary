@@ -89,6 +89,7 @@ def main():
     _run_job("Liquidation", run_liquidation, client, today, problems)
 
     state = load_state()  # re-read since run_sweep/run_liquidation already wrote state
+    state['last_checked_utc'] = datetime.now(timezone.utc).isoformat()
     state['last_error'] = (
         f"{datetime.now(timezone.utc).isoformat()}: " + " | ".join(p.splitlines()[0] for p in problems)
         if problems else None
