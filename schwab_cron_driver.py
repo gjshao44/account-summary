@@ -5,6 +5,10 @@ if today qualifies, the cash sweep and/or quarterly liquidation. Idempotent:
 safe to run more than once in a day, or more than once a week, without
 double-acting (each sub-module tracks its own "already did this" state).
 
+On positions_sync_days (Tue/Thu by default) it also pulls a fresh positions
+file into financial_data/input/ -- once per day, retried each hourly run
+until it succeeds.
+
 Crontab line -- hourly, 6:35-12:35 US/Pacific (9:35-15:35 ET), so a laptop
 that's asleep for part of the day still gets a run in. Trading is skipped
 whenever NYSE isn't open (holidays, early closes):
@@ -18,6 +22,7 @@ from schwab_client import load_automation_config, load_state, save_state, get_cl
 from schwab_alerts import check_token_health_and_alert_if_expiring, send_email
 from schwab_cash_sweep import run_sweep
 from schwab_pmmf_liquidate import run_liquidation, _NYSE
+from schwab_sync_backend import run_schwab_api_sync
 
 
 def _order_problems(job, run_result):
@@ -62,6 +67,25 @@ def _alert_problems(problems):
     save_state(state)
 
 
+def _sync_positions(client, today, cfg, problems):
+    """Pull positions once per positions_sync_day; a failure is retried next run."""
+    if today.strftime('%A') not in cfg['positions_sync_days']:
+        print(f"Positions sync: SKIPPED ({today} is not a positions sync day)")
+        return
+    if (load_state().get('last_positions_sync') or {}).get('date') == today.isoformat():
+        print(f"Positions sync: SKIPPED (already pulled on {today})")
+        return
+    try:
+        path = run_schwab_api_sync(client=client)
+    except Exception:
+        problems.append(f"Positions sync crashed:\n{traceback.format_exc()}")
+        return
+    state = load_state()
+    state['last_positions_sync'] = {"date": today.isoformat(), "file": path}
+    save_state(state)
+    print(f"Positions sync: OK ({path})")
+
+
 def _run_job(job, fn, client, today, problems):
     try:
         result = fn(client=client, today=today)
@@ -94,11 +118,6 @@ def main():
         print(f"Token health check failed: {e}")
 
     today = date.today()
-    if not _market_is_open(datetime.now(timezone.utc)):
-        save_state(state)
-        print("NYSE is closed right now -- skipping sweep/liquidation.")
-        return
-
     try:
         client = get_client()
     except Exception as e:
@@ -110,10 +129,17 @@ def main():
         return
 
     problems = []
-    _run_job("Sweep", run_sweep, client, today, problems)
-    _run_job("Liquidation", run_liquidation, client, today, problems)
+    save_state(state)
+    # Positions don't need the market open, so pull before the NYSE check.
+    _sync_positions(client, today, cfg, problems)
 
-    state = load_state()  # re-read since run_sweep/run_liquidation already wrote state
+    if _market_is_open(datetime.now(timezone.utc)):
+        _run_job("Sweep", run_sweep, client, today, problems)
+        _run_job("Liquidation", run_liquidation, client, today, problems)
+    else:
+        print("NYSE is closed right now -- skipping sweep/liquidation.")
+
+    state = load_state()  # re-read since the jobs above already wrote state
     state['last_checked_utc'] = datetime.now(timezone.utc).isoformat()
     state['last_error'] = (
         f"{datetime.now(timezone.utc).isoformat()}: " + " | ".join(p.splitlines()[0] for p in problems)

@@ -13,11 +13,12 @@ DIVIDEND_OR_INTEREST transactions carry only a CURRENCY_USD instrument (the
 security appears just as a name in `description`), so they can't be tied
 back to a ticker reliably.
 """
+import glob
 import os
 from datetime import datetime
 
 from financial_paths import INPUT_DIR, ensure_dirs
-from schwab_client import get_client, get_account_hash_map, get_account_data
+from schwab_client import get_client, get_account_hash_map, get_account_data, load_automation_config
 
 POSITION_COLUMNS = [
     '"Symbol"', '"Description"', '"Qty (Quantity)"', '"Mkt Val (Market Value)"', '"Cost Basis"'
@@ -86,8 +87,17 @@ def _write_positions_csv(path, blocks, as_of, account_map):
             f.write("\n")
 
 
-def run_schwab_api_sync():
-    client = get_client()
+def prune_old_positions_files(keep):
+    """Delete all but the newest `keep` Schwab positions files in input/."""
+    files = sorted(glob.glob(os.path.join(INPUT_DIR, 'All-Accounts-Positions-*-*-*.csv')),
+                   key=os.path.getmtime, reverse=True)
+    for path in files[max(keep, 1):]:
+        os.remove(path)
+        print(f"Deleted old {path}")
+
+
+def run_schwab_api_sync(client=None):
+    client = client or get_client()
     account_map = get_account_hash_map()
 
     now = datetime.now()
@@ -98,6 +108,8 @@ def run_schwab_api_sync():
     positions_path = os.path.join(INPUT_DIR, f"All-Accounts-Positions-{filename_ts}.csv")
     _write_positions_csv(positions_path, positions_blocks, as_of_str, account_map)
     print(f"Wrote {positions_path}")
+    prune_old_positions_files(load_automation_config()['positions_keep_files'])
+    return positions_path
 
 
 if __name__ == "__main__":

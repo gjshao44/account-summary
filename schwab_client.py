@@ -37,6 +37,11 @@ DEFAULT_AUTOMATION_CONFIG = {
     "dry_run": True,
     "automation_enabled": False,
     "sweep_days": ["Tuesday", "Friday"],
+    # Cron pulls a fresh positions file into input/ on these days (once,
+    # on the first run that succeeds), then deletes all but the newest
+    # positions_keep_files of them.
+    "positions_sync_days": ["Tuesday", "Thursday"],
+    "positions_keep_files": 1,
     "liquidate_months": [1, 4, 7, 10],
     # Quarterly sell retries each run through this day of the month (the
     # Fidelity transfer pulls the cash on the 5th).
