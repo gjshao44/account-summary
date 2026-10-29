@@ -5,7 +5,7 @@ if today qualifies, the cash sweep and/or quarterly liquidation. Idempotent:
 safe to run more than once in a day, or more than once a week, without
 double-acting (each sub-module tracks its own "already did this" state).
 
-On positions_sync_days (Tue/Thu by default) it also pulls a fresh positions
+On positions_sync_days (Tue/Fri by default) it also pulls a fresh positions
 file into financial_data/input/ -- once per day, retried each hourly run
 until it succeeds.
 

@@ -88,7 +88,8 @@ def _write_positions_csv(path, blocks, as_of, account_map):
 
 
 def prune_old_positions_files(keep):
-    """Delete all but the newest `keep` Schwab positions files in input/."""
+    """Delete all but the newest `keep` Schwab positions files in input/
+    (only called after a good pull, so the older ones kept are known good)."""
     files = sorted(glob.glob(os.path.join(INPUT_DIR, 'All-Accounts-Positions-*-*-*.csv')),
                    key=os.path.getmtime, reverse=True)
     for path in files[max(keep, 1):]:
@@ -105,6 +106,12 @@ def run_schwab_api_sync(client=None):
     filename_ts = now.strftime('%Y-%m-%d-%H%M%S')
 
     positions_blocks = fetch_all_positions(client, account_map)
+    # Only a complete pull may replace older files: an account with no rows
+    # at all (no positions, no cash) means a partial/bad API response.
+    empty = [name for name in account_map if not positions_blocks.get(name)]
+    if empty:
+        raise RuntimeError(f"Schwab returned no positions or cash for {', '.join(empty)} -- "
+                           "not writing a positions file; older files kept")
     positions_path = os.path.join(INPUT_DIR, f"All-Accounts-Positions-{filename_ts}.csv")
     _write_positions_csv(positions_path, positions_blocks, as_of_str, account_map)
     print(f"Wrote {positions_path}")

@@ -9,7 +9,7 @@ Both outputs are reflected in the common dashboard, with Portfolio and Expense t
 
 # Steps
 ## Download portoflio data
-- Schwab positions: pulled automatically by cron every Tue/Thu (see Schwab automation). Only download by hand, or click "Run Schwab Sync Now" on the dashboard, if you need a fresher file
+- Schwab positions: pulled automatically by cron every Tue/Fri (see Schwab automation). Only download by hand, or click "Run Schwab Sync Now" on the dashboard, if you need a fresher file
 - Go to schwab income, select next 12 month, and download estimated incomes (the API can't provide this)
 - Go to fidelity positions, and download all positions
 - Put all csv files under subdirectory financial_data/input
@@ -38,7 +38,7 @@ Cron runs `schwab_cron_driver.py` every weekday at :35 past each hour from 6:35 
 | Job | When | What |
 |---|---|---|
 | Token check | every run | Emails a warning when the Schwab refresh token is within `warn_token_days` (2) of expiring |
-| Positions pull | Tue, Thu (`positions_sync_days`) | Writes `All-Accounts-Positions-<timestamp>.csv` into financial_data/input for all 6 accounts, then deletes older ones, keeping the newest `positions_keep_files` (1). Once per day; retried next hour if it fails. Runs even if the market is closed |
+| Positions pull | Tue, Fri (`positions_sync_days`) | Writes `All-Accounts-Positions-<timestamp>.csv` into financial_data/input for all 6 accounts, then deletes older ones, keeping the newest `positions_keep_files` (2: the new file plus the last known good one). If any account comes back empty, no file is written and nothing is deleted. Once per day; retried next hour if it fails. Runs even if the market is closed |
 | Cash sweep | Tue, Fri (`sweep_days`), market open | Buys `floor(cash / price)` shares of SGOV in Guoqing_Invest and Min_Invest. Skipped from the last day of Dec/Mar/Jun/Sep through day 7 (`sweep_blackout_end_day`) of Jan/Apr/Jul/Oct |
 | Quarterly sell | Jan/Apr/Jul/Oct, trading days 1st-4th (`liquidate_last_day`), market open | Sells all SGOV in the two sweep accounts so cash is ready for the Fidelity transfer on the 5th. Retried every run until FILLED |
 
