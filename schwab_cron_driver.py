@@ -99,6 +99,14 @@ def _run_job(job, fn, client, today, problems):
 
 def main():
     cfg = load_automation_config()
+
+    # Token check writes token_expires_utc to state itself, so run it before
+    # loading state -- otherwise our stale copy overwrites the fresh expiry.
+    try:
+        check_token_health_and_alert_if_expiring()
+    except Exception as e:
+        print(f"Token health check failed: {e}")
+
     state = load_state()
     state['last_checked_utc'] = datetime.now(timezone.utc).isoformat()
 
@@ -106,16 +114,7 @@ def main():
         state['last_error'] = None
         save_state(state)
         print("automation_enabled is false -- skipping (token health check still runs).")
-        try:
-            check_token_health_and_alert_if_expiring()
-        except Exception as e:
-            print(f"Token health check failed: {e}")
         return
-
-    try:
-        check_token_health_and_alert_if_expiring()
-    except Exception as e:
-        print(f"Token health check failed: {e}")
 
     today = date.today()
     try:
